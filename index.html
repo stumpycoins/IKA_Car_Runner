@@ -386,14 +386,14 @@ const loader=new THREE.TextureLoader();
 
 const sunGroup=new THREE.Group();
 const sunMesh=new THREE.Mesh(new THREE.SphereGeometry(2,32,32),new THREE.MeshBasicMaterial({color:0xffdd55}));
-const sunGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:loader.load('assets/images/glow.png'),color:0xffdd88,transparent:true,opacity:0.6}));
+const sunGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:loader.load('assets/images/glow1.png'),color:0xffdd88,transparent:true,opacity:0.6}));
 sunGlow.scale.set(14,14,1);
 sunGroup.add(sunMesh,sunGlow);
 scene.add(sunGroup);
 
 const moonGroup=new THREE.Group();
 const moonMesh=new THREE.Mesh(new THREE.SphereGeometry(1.5,32,32),new THREE.MeshBasicMaterial({color:0xddddff}));
-const moonGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:loader.load('assets/images/glow1.png'),color:0xaaaaff,transparent:true,opacity:0.5}));
+const moonGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:loader.load('assets/images/glow.png'),color:0xaaaaff,transparent:true,opacity:0.5}));
 moonGlow.scale.set(10,10,1);
 moonGroup.add(moonMesh,moonGlow);
 scene.add(moonGroup);
@@ -1495,5 +1495,6 @@ addEventListener("resize",()=>{
 </script>
 </body>
 </html>
+
 
 
