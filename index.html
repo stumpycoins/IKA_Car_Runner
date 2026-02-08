@@ -456,7 +456,6 @@ font-family: "Press Start 2P", system-ui;
   <button id="startBtn" class="start-btn">
   <img src="assets/images/start.png" alt="Start Game">
 </button>
-
   <div class="colorLabel">Choose Your Car</div>
   <div id="colorPicker">
     <div class="colorDot" data-color="0x1e90ff" style="background:#1e90ff"></div>
@@ -466,9 +465,7 @@ font-family: "Press Start 2P", system-ui;
     <div class="colorDot" data-color="0x8e24aa" style="background:#8e24aa"></div>
   </div>
 </div>
-
 </div>
-
 <div id="hud">
 Score: <span id="score">0</span><br>
 Level: <span id="level">1</span><br>
@@ -1301,7 +1298,7 @@ hood.material.color.setHex(selectedCarColor);
 waitingForAd = false;
 document.getElementById("reviveBtn").style.display = "block";
 document.getElementById("reviveBtn").disabled = false;
-document.getElementById("reviveBtn").innerText = "🎥 Watch Ad & Continue";
+document.getElementById("reviveBtn").innerText = "Watch Ad & Continue";
 
   // core state
   score = 0;
@@ -1824,5 +1821,6 @@ addEventListener("resize",()=>{
 </script>
 </body>
 </html>
+
 
 
