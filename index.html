@@ -774,14 +774,57 @@ justify-content: space-around;
     }
   }
 
-  // add all
+ 
+
+// =============================
+// REAR BACKLIGHTS
+// =============================
+const backLightMaterial = new THREE.MeshBasicMaterial({
+  color: 0xaa0000,
+  //emissive: 0xff0000,
+  //emissiveIntensity: 1,
+  transparent: true,
+  opacity: 0.9
+});
+
+const backLightGeo = new THREE.BoxGeometry(0.3, 0.15, 0.05);
+
+// Left light
+const backLightLeft = new THREE.Mesh(backLightGeo, backLightMaterial);
+backLightLeft.position.set(-0.4, 0.35, 1.2);
+
+// Right light
+const backLightRight = new THREE.Mesh(backLightGeo, backLightMaterial);
+backLightRight.position.set(0.4, 0.35, 1.2);
+
+// PREVIEW BACKLIGHTS
+const previewBackLightMaterial = new THREE.MeshBasicMaterial({
+  color: 0xaa0000,
+  transparent: true,
+  opacity: 0.9
+});
+
+const previewBackLightGeo = new THREE.BoxGeometry(0.3, 0.15, 0.05);
+
+const previewBackLightLeft = new THREE.Mesh(previewBackLightGeo, previewBackLightMaterial);
+previewBackLightLeft.position.set(-0.4, 0.35, 1.2);
+
+const previewBackLightRight = new THREE.Mesh(previewBackLightGeo, previewBackLightMaterial);
+previewBackLightRight.position.set(0.4, 0.35, 1.2);
+
+previewCar.add(previewBackLightLeft);
+previewCar.add(previewBackLightRight);
+
+
+
+ // add all
   previewCar.add(previewBody, previewRoof);
   previewScene.add(previewCar);
-  previewCar.scale.set(1.8, 1.8, 1.8); // BIG & punchy
+  previewCar.scale.set(1.8, 1.8, 1.8); // BIG & punchy\
+  
 
-
-
-
+  
+  
   // =============================
   // ROTATION LOOP
   // =============================
@@ -825,8 +868,10 @@ justify-content: space-around;
       car.add(wheel);
     }
   }
-  car.add(body,hood,roof);
-
+  car.add(body,hood,roof,backLightLeft);
+   car.add(body,hood,roof,backLightRight);
+	
+	
   const headlightL=new THREE.SpotLight(0xffffff,2.2,30,0.4,0.6,1);
   headlightL.position.set(-0.42,0.52,1.2);
   headlightL.target.position.set(-0.42,0.2,-12);
