@@ -689,6 +689,34 @@ justify-content: space-around;
   }
 
 
+// =============================
+// GRASS LAND (LEFT & RIGHT)
+// =============================
+const grassMaterial = new THREE.MeshStandardMaterial({
+  color: 0x388e3c,
+  roughness: 1
+});
+
+// Left grass
+const grassLeft = new THREE.Mesh(
+  new THREE.BoxGeometry(20, 0.1, 400),
+  grassMaterial
+);
+grassLeft.position.set(-13, -0.05, -100);
+scene.add(grassLeft);
+
+// Right grass
+const grassRight = new THREE.Mesh(
+  new THREE.BoxGeometry(20, 0.1, 400),
+  grassMaterial
+);
+
+grassLeft.material.color.offsetHSL(0, 0, -0.05);
+grassRight.material.color.offsetHSL(0, 0, 0.05);
+grassRight.position.set(13, -0.05, -100);
+scene.add(grassRight);
+
+
   // =============================
   // CAR
   // =============================
