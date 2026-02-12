@@ -850,6 +850,81 @@ justify-content: space-around;
 
   car.position.set(0,0.1,4);
   scene.add(car);
+  
+  // =============================
+// EXHAUST FLAME
+// =============================
+const flameGeo = new THREE.ConeGeometry(0.15, 0.6, 8);
+const flameMat = new THREE.MeshBasicMaterial({
+  color: 0xff5500,
+  transparent: true,
+  opacity: 0.8
+});
+
+const flame = new THREE.Mesh(flameGeo, flameMat);
+flame.rotation.x = Math.PI;
+flame.position.set(0, 0.25, 1.8); // adjust to exhaust pipe
+flame.visible = false;
+
+car.add(flame);
+
+  
+  
+  // =============================
+// DRIFT SMOKE SYSTEM
+// =============================
+const smokeParticles = [];
+
+function spawnSmoke(){
+  const geo = new THREE.SphereGeometry(0.25, 8, 8);
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.6
+  });
+
+  const smoke = new THREE.Mesh(geo, mat);
+
+  // Spawn behind car
+  smoke.position.set(
+    car.position.x + (Math.random()-0.5)*0.4,
+    0.15,
+    car.position.z + 1.2
+  );
+
+  smoke.userData.life = 1;
+  scene.add(smoke);
+  smokeParticles.push(smoke);
+}
+
+// =============================
+// SKID MARK SYSTEM
+// =============================
+const skidMarks = [];
+
+function spawnSkid(){
+  const geo = new THREE.PlaneGeometry(0.4, 1.2);
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0x111111,
+    transparent: true,
+    opacity: 0.6,
+    side: THREE.DoubleSide
+  });
+
+  const skid = new THREE.Mesh(geo, mat);
+  skid.rotation.x = -Math.PI / 2;
+
+  skid.position.set(
+    car.position.x,
+    0.01,
+    car.position.z + 1.5
+  );
+
+  skid.userData.life = 1;
+  scene.add(skid);
+  skidMarks.push(skid);
+}
+
 
   // =============================
   // LANES
@@ -1753,7 +1828,21 @@ justify-content: space-around;
 
     // Lane movement
 
-    car.position.x += (targetX - car.position.x) * laneSmoothness;
+    const prevX = car.position.x;
+car.position.x += (targetX - car.position.x) * laneSmoothness;
+
+const isDrifting = Math.abs(targetX - prevX) > 0.05;
+
+// Spawn smoke only if:
+// - Running
+// - Not jumping
+// - Actually drifting left/right
+if(running && !isJumping && isDrifting){
+  if(Math.random() < 0.4){ // control density
+    spawnSmoke();
+  }
+}
+
 
     // Idle bounce
     let baseY = 0.1 + Math.sin(score*0.02)*0.05;
@@ -1852,6 +1941,35 @@ justify-content: space-around;
         clouds.splice(i,1);
       }
     }
+
+	// Update smoke
+for(let i = smokeParticles.length-1; i>=0; i--){
+  const s = smokeParticles[i];
+
+  s.position.y += 0.02;      // rise
+  s.scale.multiplyScalar(1.03); // expand
+  s.material.opacity -= 0.02;
+  s.userData.life -= 0.02;
+
+  if(s.userData.life <= 0){
+    scene.remove(s);
+    smokeParticles.splice(i,1);
+  }
+}
+if(running && !isJumping && isDrifting){
+  if(Math.random() < 0.3){
+    spawnSmoke();
+    spawnSkid();
+  }
+}
+
+console.log("Speed -->"+speed);
+if(speed > 0.1 && running && !isJumping){
+  flame.visible = true;
+  flame.scale.y = 1 + Math.random() * 0.5;
+}else{
+  flame.visible = false;
+}
 
     renderer.render(scene,camera);
   }
