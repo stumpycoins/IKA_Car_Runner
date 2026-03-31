@@ -61,7 +61,16 @@
           <button id="startBtn" class="start-btn" type="button">
             <img src="assets/images/start.png" alt="Start Game" />
           </button>
-          <button id="climateModeToggle" class="modeBtn" type="button">Climate: Sunny</button>
+          <label class="modeSelectWrap" for="climateModeToggle">
+            <span class="modeSelectLabel">Climate</span>
+            <select id="climateModeToggle" class="modeSelect">
+              <option value="sunny">Sunny</option>
+              <option value="night">Night</option>
+              <option value="rainny">Rainy</option>
+              <option value="snow">Snow</option>
+              <option value="mixed">Dynamic</option>
+            </select>
+          </label>
           <div class="colorHint">Pick your Car color</div>
           <div id="colorPicker">
             <div class="colorDot" data-color="0x1e90ff" style="background: #1e90ff"></div>
@@ -114,8 +123,8 @@
 
     <audio id="engine" src="assets/audio/engine.wav" loop></audio>
     <audio id="crash" src="assets/audio/crash.mp3"></audio>
-    <audio id="sunnyMusic" src="assets/audio/Sunny_Music.mp3" loop></audio>
-    <audio id="rainnyMusic" src="assets/audio/Rainny_Music.mp3" loop></audio>
+    <audio id="sunnyMusic" src="assets/audio/Sunny_Music.mp3" loop autoplay playsinline></audio>
+    <audio id="rainnyMusic" src="assets/audio/Rainny_Music.mp3" loop autoplay playsinline></audio>
 
     <script src="assets/script/Three_Min.js"></script>
     <script src="assets/script/three-object-factories.js"></script>
