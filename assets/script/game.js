@@ -1877,7 +1877,7 @@ function animate() {
     if (landingSafeTimer < 0) landingSafeTimer = 0;
   }
   const speedMultiplier = jetActive ? JET_SPEED_MULTIPLIER : 1;
-  const effectiveSpeed = speed * speedMultiplier;
+  const effectiveSpeed = (isTouching ? lockedSpeed : speed) * speedMultiplier;
   if (climateMode === "rainny") {
     rainEnabled = true;
     snowEnabled = false;
