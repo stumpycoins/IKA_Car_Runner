@@ -196,9 +196,123 @@
     return tree;
   }
 
+  function getLandscapeX(side, minGrassX = 6.5, maxGrassX = 21.5) {
+    let x = (side < 0 ? -1 : 1) * (minGrassX + Math.random() * (maxGrassX - minGrassX));
+    if (side < 0) {
+      const blockedTrackCenters = [-12, -17];
+      const blockedHalfWidth = 2.1;
+      let attempts = 0;
+      while (attempts < 10 && blockedTrackCenters.some(cx => Math.abs(x - cx) < blockedHalfWidth)) {
+        x = -1 * (minGrassX + Math.random() * (maxGrassX - minGrassX));
+        attempts++;
+      }
+    }
+    return x + (Math.random() - 0.5) * 0.9;
+  }
+
+  function createSunflower(side) {
+    const flower = new THREE.Group();
+    const stem = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.04, 0.05, 1.2, 8),
+      new THREE.MeshStandardMaterial({ color: 0x4f8f31, roughness: 1 })
+    );
+    stem.position.y = 0.6;
+    const center = new THREE.Mesh(
+      new THREE.SphereGeometry(0.14, 10, 10),
+      new THREE.MeshStandardMaterial({ color: 0x4e342e, roughness: 0.9 })
+    );
+    center.position.y = 1.24;
+    const petalMat = new THREE.MeshStandardMaterial({ color: 0xf6c335, roughness: 0.7 });
+    for (let i = 0; i < 8; i++) {
+      const petal = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.28, 0.02), petalMat);
+      const angle = (i / 8) * Math.PI * 2;
+      petal.position.set(Math.cos(angle) * 0.16, 1.24 + Math.sin(angle) * 0.16, 0);
+      petal.rotation.z = angle;
+      flower.add(petal);
+    }
+    const leafMat = new THREE.MeshStandardMaterial({ color: 0x3f8b3d, roughness: 0.95, side: THREE.DoubleSide });
+    const leafLeft = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.14), leafMat);
+    leafLeft.position.set(-0.12, 0.72, 0);
+    leafLeft.rotation.z = -0.7;
+    const leafRight = leafLeft.clone();
+    leafRight.position.x = 0.12;
+    leafRight.rotation.z = 0.7;
+    flower.add(stem, center, leafLeft, leafRight);
+    flower.position.set(getLandscapeX(side, 7, 18), 0, -220);
+    flower.rotation.y = Math.random() * Math.PI * 2;
+    return flower;
+  }
+
+  function createRoseBush(side) {
+    const bush = new THREE.Group();
+    const mound = new THREE.Mesh(
+      new THREE.SphereGeometry(0.6, 12, 12),
+      new THREE.MeshStandardMaterial({ color: 0x2f7a35, roughness: 1 })
+    );
+    mound.scale.set(1.25, 0.78, 1.1);
+    mound.position.y = 0.38;
+    bush.add(mound);
+
+    const roseColors = [0xc62828, 0xd81b60, 0xff5a5f];
+    for (let i = 0; i < 6; i++) {
+      const rose = new THREE.Mesh(
+        new THREE.SphereGeometry(0.11 + Math.random() * 0.03, 8, 8),
+        new THREE.MeshStandardMaterial({
+          color: roseColors[Math.floor(Math.random() * roseColors.length)],
+          roughness: 0.7
+        })
+      );
+      rose.position.set((Math.random() - 0.5) * 0.9, 0.54 + Math.random() * 0.28, (Math.random() - 0.5) * 0.7);
+      bush.add(rose);
+    }
+
+    bush.position.set(getLandscapeX(side, 7, 18), 0, -220);
+    bush.rotation.y = Math.random() * Math.PI * 2;
+    return bush;
+  }
+
+  function createCoconutTree(side) {
+    const tree = new THREE.Group();
+    const trunk = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.19, 4.8, 10),
+      new THREE.MeshStandardMaterial({ color: 0x7a5a39, roughness: 0.95 })
+    );
+    trunk.position.y = 2.3;
+    trunk.rotation.z = side < 0 ? 0.08 : -0.08;
+    tree.add(trunk);
+
+    const leafMat = new THREE.MeshStandardMaterial({
+      color: 0x2f8f46,
+      roughness: 0.85,
+      side: THREE.DoubleSide
+    });
+    for (let i = 0; i < 6; i++) {
+      const frond = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 0.34), leafMat);
+      frond.position.set(0, 4.8, 0);
+      frond.rotation.x = -Math.PI / 2.5;
+      frond.rotation.z = (i / 6) * Math.PI * 2;
+      frond.rotation.y = ((i % 2) * 0.2) - 0.1;
+      tree.add(frond);
+    }
+
+    const coconutMat = new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 1 });
+    for (let i = 0; i < 3; i++) {
+      const coconut = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), coconutMat);
+      coconut.position.set((Math.random() - 0.5) * 0.3, 4.45 + Math.random() * 0.25, (Math.random() - 0.5) * 0.3);
+      tree.add(coconut);
+    }
+
+    tree.position.set(getLandscapeX(side, 8, 20), 0, -235);
+    tree.rotation.y = Math.random() * Math.PI * 2;
+    return tree;
+  }
+
   window.IKAThreeFactories = {
     createPlayerCar,
     createCloud,
-    createTree
+    createTree,
+    createSunflower,
+    createRoseBush,
+    createCoconutTree
   };
 })();

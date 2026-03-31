@@ -24,7 +24,7 @@ const soundToggleBtn = document.getElementById("soundToggle");
 const soundIcon = document.getElementById("soundIcon");
 const pauseBtn = document.getElementById("pauseBtn");
 const pauseIcon = document.getElementById("pauseIcon");
-const climateModeToggleBtn = document.getElementById("climateModeToggle");
+const climateModeToggleInput = document.getElementById("climateModeToggle");
 const gameCanvasHost = document.getElementById("gameCanvasHost");
 const previewCanvasHost = document.getElementById("previewCanvasHost");
 const settingsToggleBtn = document.getElementById("settingsToggleBtn");
@@ -40,6 +40,7 @@ const resolutionMenuValue = document.getElementById("resolutionMenuValue");
 const startScreenEl = document.getElementById("startScreen");
 const gameOverEl = document.getElementById("gameOver");
 const reviveBtnEl = document.getElementById("reviveBtn");
+const hudEl = document.getElementById("hud");
 
 // =============================
 // BASIC THREE SETUP
@@ -130,8 +131,12 @@ function updateSettingsMenuForContext() {
 
   resolutionMenuBtn.hidden = !onStartScreen;
   pauseMenuBtn.hidden = !inGame;
+  hudEl.hidden = !inGame;
   pauseMenuValue.textContent = paused ? "On" : "Off";
   setTogglePillState(pauseMenuValue, paused);
+}
+function updateClimateSelector() {
+  if (climateModeToggleInput) climateModeToggleInput.value = climateMode;
 }
 // =============================
 // SKY OBJECTS
@@ -426,21 +431,25 @@ createRailTrack(-17);
 const windowMat = new THREE.MeshStandardMaterial({
   color: 0x90caf9,
   transparent: true,
-  opacity: 0.75
+  opacity: 0.75,
+  emissive: 0x000000,
+  emissiveIntensity: 0
 });
 const doorMat = new THREE.MeshStandardMaterial({
   color: 0xeeeeee
 });
-function addTrainWindows(parent) {
+function addTrainWindows(parent, registry) {
   for (let i = -1; i <= 1; i++) {
     // LEFT WINDOW
     const winL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.35, 0.8), windowMat);
     winL.position.set(-1.11, 0.35, i * 1.1);
     parent.add(winL);
+    registry.push(winL.material);
     // RIGHT WINDOW
     const winR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.35, 0.8), windowMat);
     winR.position.set(1.11, 0.35, i * 1.1);
     parent.add(winR);
+    registry.push(winR.material);
   }
 }
 function addTrainDoors(parent) {
@@ -456,6 +465,8 @@ function addTrainDoors(parent) {
 // =============================
 function createTrain(xPos, direction) {
   const train = new THREE.Group();
+  const windowMaterials = [];
+  const headLights = [];
   const engineMat = new THREE.MeshStandardMaterial({
     color: 0xd32f2f
   });
@@ -465,7 +476,9 @@ function createTrain(xPos, direction) {
   const engineWindowMat = new THREE.MeshStandardMaterial({
     color: 0x90caf9,
     transparent: true,
-    opacity: 0.9
+    opacity: 0.9,
+    emissive: 0x000000,
+    emissiveIntensity: 0
   });
   const headlightMat = new THREE.MeshStandardMaterial({
     color: 0xfff2c2,
@@ -477,13 +490,16 @@ function createTrain(xPos, direction) {
     const frontWindow = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.5, 0.05), engineWindowMat);
     frontWindow.position.set(0, 0.6, faceSign * 2.03);
     engine.add(frontWindow);
+    windowMaterials.push(frontWindow.material);
     // Side windows for better cabin visibility
     const sideWindowL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.4, 0.9), engineWindowMat);
     sideWindowL.position.set(-1.08, 0.55, 0);
     engine.add(sideWindowL);
+    windowMaterials.push(sideWindowL.material);
     const sideWindowR = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.4, 0.9), engineWindowMat);
     sideWindowR.position.set(1.08, 0.55, 0);
     engine.add(sideWindowR);
+    windowMaterials.push(sideWindowR.material);
     // Two headlights on the engine face
     const leftLight = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), headlightMat);
     leftLight.position.set(-0.45, 0.45, faceSign * 2.08);
@@ -494,6 +510,7 @@ function createTrain(xPos, direction) {
     const beam = new THREE.PointLight(0xfff3c4, isLowEnd ? 0.6 : 1.0, 10);
     beam.position.set(0, 0.45, faceSign * 2.05);
     engine.add(beam);
+    headLights.push(beam);
   }
   // ---- FRONT ENGINE ----
   const engineFront = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.6, 4), engineMat);
@@ -507,7 +524,7 @@ function createTrain(xPos, direction) {
     coach.position.y = 0.9;
     train.add(coach);
     // add windows and doors
-    addTrainWindows(coach);
+    addTrainWindows(coach, windowMaterials);
     addTrainDoors(coach);
   }
   // ---- BACK ENGINE ----
@@ -519,6 +536,8 @@ function createTrain(xPos, direction) {
   addEngineDetails(engineBack, -1);
   train.position.set(xPos, 0, -200);
   train.userData.direction = direction;
+  train.userData.windowMaterials = windowMaterials;
+  train.userData.headLights = headLights;
   scene.add(train);
   return train;
 }
@@ -682,6 +701,18 @@ function spawnTree(side) {
   scene.add(tree);
   trees.push(tree);
 }
+const landscapeDecor = [];
+const MAX_LANDSCAPE_DECOR = isLowEnd ? 22 : 40;
+function spawnLandscapeDecor(side) {
+  const roll = Math.random();
+  const decor = roll < 0.18
+    ? THREE_FACTORIES.createCoconutTree(side)
+    : roll < 0.55
+      ? THREE_FACTORIES.createSunflower(side)
+      : THREE_FACTORIES.createRoseBush(side);
+  scene.add(decor);
+  landscapeDecor.push(decor);
+}
 // =============================
 // STREET LIGHTS
 // =============================
@@ -716,7 +747,7 @@ function createStreetLight(x) {
   );
   lampHead.position.set(0.88 * Math.sign(-x), 4.45, 0);
   const lampGlow = new THREE.Mesh(
-    new THREE.SphereGeometry(0.14, 10, 10),
+    new THREE.SphereGeometry(0.26, 12, 12),
     new THREE.MeshBasicMaterial({
       color: 0xffd58f,
       transparent: true,
@@ -724,7 +755,7 @@ function createStreetLight(x) {
     })
   );
   lampGlow.position.copy(lampHead.position);
-  const lampLight = new THREE.PointLight(0xffd58f, 0, 18, 2);
+  const lampLight = new THREE.PointLight(0xffd58f, 0, 28, 1.65);
   lampLight.position.set(lampHead.position.x, 4.25, 0);
   lightGroup.add(pole, arm, lampHead, lampGlow, lampLight);
   lightGroup.position.set(x, 0, -240);
@@ -734,9 +765,9 @@ function createStreetLight(x) {
 }
 function setStreetLightsEnabled(enabled) {
   for (const lightGroup of streetLights) {
-    lightGroup.userData.lampLight.intensity = enabled ? 3.4 : 0;
-    lightGroup.userData.lampGlow.material.opacity = enabled ? 0.94 : 0;
-    lightGroup.userData.lampHead.material.emissiveIntensity = enabled ? 2.4 : 0;
+    lightGroup.userData.lampLight.intensity = enabled ? 6.4 : 0;
+    lightGroup.userData.lampGlow.material.opacity = enabled ? 0.98 : 0;
+    lightGroup.userData.lampHead.material.emissiveIntensity = enabled ? 3.6 : 0;
   }
 }
 function updateStreetLights(speed, enabled) {
@@ -749,9 +780,10 @@ function updateStreetLights(speed, enabled) {
     const lightGroup = streetLights[i];
     lightGroup.position.z += speed * WORLD_SPEED;
     lightGroup.position.x += roadCurve * 0.012;
-    lightGroup.userData.lampLight.intensity = enabled ? 3.4 : 0;
-    lightGroup.userData.lampGlow.material.opacity = enabled ? 0.94 : 0;
-    lightGroup.userData.lampHead.material.emissiveIntensity = enabled ? 2.4 : 0;
+    const glowPulse = enabled ? 0.92 + Math.sin(clock.elapsedTime * 6 + i) * 0.08 : 0;
+    lightGroup.userData.lampLight.intensity = enabled ? 6.2 + Math.sin(clock.elapsedTime * 4 + i) * 0.55 : 0;
+    lightGroup.userData.lampGlow.material.opacity = glowPulse;
+    lightGroup.userData.lampHead.material.emissiveIntensity = enabled ? 3.2 + Math.sin(clock.elapsedTime * 3.5 + i) * 0.35 : 0;
     if (lightGroup.position.z > 24) {
       scene.remove(lightGroup);
       streetLights.splice(i, 1);
@@ -1188,6 +1220,8 @@ let denseTimer = 0;
 let nextDenseTime = 15 + Math.random() * 25;
 const fireflies = [];
 const MAX_FIREFLIES = isLowEnd ? 15 : 40;
+const fireworks = [];
+let nextNightFireworkScore = 1000;
 function spawnFirefly() {
   const geo = new THREE.SphereGeometry(0.08, 6, 6);
   const mat = new THREE.MeshBasicMaterial({
@@ -1237,6 +1271,14 @@ function playBackgroundMusic() {
   const activeTrack = getActiveMusicTrack();
   if (activeTrack.paused) activeTrack.play().catch(() => {});
 }
+function attemptAutoplayMusic() {
+  if (!musicEnabled) return;
+  [sunnyMusic, rainnyMusic].forEach(track => {
+    track.autoplay = true;
+    track.playsInline = true;
+  });
+  playBackgroundMusic();
+}
 function updateSoundIcon() {
   soundIcon.src = soundEnabled ? "assets/images/sound-on.png" : "assets/images/sound-off.png";
 }
@@ -1244,6 +1286,47 @@ function clearRainDrops() {
   for (let i = rainDrops.length - 1; i >= 0; i--) {
     scene.remove(rainDrops[i]);
     rainDrops.splice(i, 1);
+  }
+}
+function spawnNightFirework() {
+  const burst = new THREE.Group();
+  const burstColor = [0xffd54f, 0xff6f61, 0x8ec5ff, 0xff78c5][Math.floor(Math.random() * 4)];
+  for (let i = 0; i < 22; i++) {
+    const spark = new THREE.Mesh(
+      new THREE.SphereGeometry(0.11, 6, 6),
+      new THREE.MeshBasicMaterial({
+        color: burstColor,
+        transparent: true,
+        opacity: 0.95
+      })
+    );
+    const theta = (i / 22) * Math.PI * 2;
+    const phi = Math.random() * Math.PI;
+    const sparkSpeed = 0.05 + Math.random() * 0.07;
+    spark.userData.velocity = new THREE.Vector3(
+      Math.cos(theta) * Math.sin(phi) * sparkSpeed,
+      Math.cos(phi) * sparkSpeed * 0.9,
+      Math.sin(theta) * Math.sin(phi) * sparkSpeed
+    );
+    burst.add(spark);
+  }
+  burst.position.set((Math.random() - 0.5) * 28, 15 + Math.random() * 10, -120 - Math.random() * 60);
+  burst.userData.life = 1;
+  scene.add(burst);
+  fireworks.push(burst);
+}
+function updateFireworks() {
+  for (let i = fireworks.length - 1; i >= 0; i--) {
+    const burst = fireworks[i];
+    burst.userData.life -= 0.02;
+    burst.children.forEach(spark => {
+      spark.position.add(spark.userData.velocity);
+      spark.material.opacity = Math.max(0, burst.userData.life);
+    });
+    if (burst.userData.life <= 0) {
+      scene.remove(burst);
+      fireworks.splice(i, 1);
+    }
   }
 }
 function clearSnowFlakes() {
@@ -1255,8 +1338,7 @@ function clearSnowFlakes() {
 function setClimateMode(mode) {
   climateMode = mode;
   localStorage.setItem("ika_climate_mode", mode);
-  const climateLabel = CLIMATE_LABELS[mode] || mode;
-  climateModeToggleBtn.textContent = `${UI_TEXT.climatePrefix}: ${climateLabel}`;
+  updateClimateSelector();
   rainTimer = 0;
   nextRainTime = 8 + Math.random() * 12;
   if (mode === "rainny") {
@@ -1277,11 +1359,6 @@ function setClimateMode(mode) {
     clearRainDrops();
     clearSnowFlakes();
   }
-}
-function cycleClimateMode() {
-  const idx = CLIMATE_MODES.indexOf(climateMode);
-  setClimateMode(CLIMATE_MODES[(idx + 1) % CLIMATE_MODES.length]);
-  syncAudioSettings();
 }
 function syncAudioSettings() {
   crash.muted = !soundEnabled;
@@ -1324,8 +1401,9 @@ function setSoundState(state) {
 soundToggleBtn.addEventListener("click", () => {
   setSoundState(!soundEnabled);
 });
-climateModeToggleBtn.addEventListener("click", () => {
-  cycleClimateMode();
+climateModeToggleInput.addEventListener("change", () => {
+  setClimateMode(climateModeToggleInput.value);
+  syncAudioSettings();
 });
 settingsToggleBtn.addEventListener("click", () => {
   setSettingsPanelOpen(settingsPanel.hidden);
@@ -1409,12 +1487,17 @@ function resetGame(options = {}) {
   jetWingRight.visible = false;
   trees.forEach(t => scene.remove(t));
   trees.length = 0;
+  landscapeDecor.forEach(item => scene.remove(item));
+  landscapeDecor.length = 0;
   clouds.forEach(c => scene.remove(c));
   clouds.length = 0;
   buildings.forEach(b => scene.remove(b));
   buildings.length = 0;
   streetLights.forEach(lightGroup => scene.remove(lightGroup));
   streetLights.length = 0;
+  fireworks.forEach(item => scene.remove(item));
+  fireworks.length = 0;
+  nextNightFireworkScore = 1000;
   clearRainDrops();
   clearSnowFlakes();
   // UI
@@ -1455,11 +1538,17 @@ const rainnyMusic = document.getElementById("rainnyMusic");
 engine.volume = isLowEnd ? 0.25 : 0.4;
 sunnyMusic.volume = 0.42;
 rainnyMusic.volume = 0.42;
+sunnyMusic.loop = true;
+rainnyMusic.loop = true;
 setClimateMode(climateMode);
 syncAudioSettings();
-window.addEventListener("load", () => {
-  playBackgroundMusic();
-}, { once: true });
+attemptAutoplayMusic();
+window.addEventListener("DOMContentLoaded", attemptAutoplayMusic, { once: true });
+window.addEventListener("load", attemptAutoplayMusic, { once: true });
+window.addEventListener("pageshow", attemptAutoplayMusic);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) attemptAutoplayMusic();
+});
 document.addEventListener("pointerdown", () => {
   playBackgroundMusic();
 }, {
@@ -1767,6 +1856,23 @@ function updateSky() {
   starField.visible = !isLowEnd && isNightNow;
   setStreetLightsEnabled(streetLightsOn);
   updateClimateGroundPatches();
+  [train1, train2].forEach(train => {
+    train.userData.windowMaterials.forEach(material => {
+      material.emissive.setHex(isNightNow ? 0xffd98a : 0x000000);
+      material.emissiveIntensity = isNightNow ? 1.8 : 0;
+      material.color.setHex(isNightNow ? 0xc8c089 : 0x90caf9);
+      material.opacity = isNightNow ? 0.96 : 0.75;
+    });
+    train.userData.headLights.forEach(light => {
+      light.intensity = isNightNow ? (isLowEnd ? 1.1 : 1.8) : 0;
+    });
+  });
+}
+function ensureGameplaySceneState() {
+  if (startScreenActive) return;
+  if (previewIsolationActive) {
+    setStartPreviewIsolation(false);
+  }
 }
 function updateGrass(speed) {
   denseTimer += clock.getDelta();
@@ -1789,6 +1895,20 @@ function updateGrass(speed) {
     if (g.position.z > 20) {
       scene.remove(g);
       grasses.splice(i, 1);
+    }
+  }
+}
+function updateLandscapeDecor(speed) {
+  if (landscapeDecor.length < MAX_LANDSCAPE_DECOR && Math.random() < 0.1 * lowEndFactor) {
+    spawnLandscapeDecor(Math.random() > 0.5 ? -1 : 1);
+  }
+  for (let i = landscapeDecor.length - 1; i >= 0; i--) {
+    const item = landscapeDecor[i];
+    item.position.z += speed * WORLD_SPEED;
+    item.position.x += roadCurve * 0.015;
+    if (item.position.z > 20) {
+      scene.remove(item);
+      landscapeDecor.splice(i, 1);
     }
   }
 }
@@ -1857,6 +1977,7 @@ function animate() {
     renderer.render(scene, camera);
     return;
   }
+  ensureGameplaySceneState();
   const delta = clock.getDelta();
   // train movement
   train1.position.z += 0.8;
@@ -1923,10 +2044,12 @@ function animate() {
     const d = lineSeg.userData.depth;
     lineSeg.position.x = roadCurve + curveDir * previewBend * d * d + lineSeg.userData.offset;
   }
+  updateSky();
   camera.rotation.z = -roadCurve * 0.02;
   updateBuildings(effectiveSpeed);
   updateStreetLights(effectiveSpeed, isNightNow);
   updateGrass(effectiveSpeed);
+  updateLandscapeDecor(effectiveSpeed);
   // Score & Speed (0 → max 2)
   score++;
   level = Math.floor(score / 1000) + 1;
@@ -1935,7 +2058,11 @@ function animate() {
   document.getElementById("speed").innerText = (effectiveSpeed * WORLD_SPEED).toFixed(1);
   updateFarmland(effectiveSpeed);
   updateFireflies(effectiveSpeed);
-  updateSky();
+  updateFireworks();
+  if (climateMode === "night" && score >= nextNightFireworkScore) {
+    spawnNightFirework();
+    nextNightFireworkScore += 1000;
+  }
   if (score >= nextJetScore) {
     if (!jetActive && jetPowers.length === 0) {
       spawnJetPower();
@@ -2150,7 +2277,7 @@ function animate() {
       clouds.splice(i, 1);
     }
   }
-  if (!isNightNow && birds.length < MAX_BIRDS && Math.random() < 0.015 * lowEndFactor) {
+  if (climateMode === "sunny" && birds.length < MAX_BIRDS && Math.random() < 0.015 * lowEndFactor) {
     spawnBird();
   }
   for (let i = birds.length - 1; i >= 0; i--) {
@@ -2161,7 +2288,7 @@ function animate() {
     const flap = Math.sin(clock.elapsedTime * 12 + b.userData.phase) * 0.55;
     b.userData.wings[0].rotation.z = flap;
     b.userData.wings[1].rotation.z = -flap;
-    b.visible = !isNightNow;
+    b.visible = climateMode === "sunny";
     if (b.position.z > 25 || b.position.x > 24 || b.position.x < -24) {
       scene.remove(b);
       birds.splice(i, 1);
