@@ -300,6 +300,7 @@ button {
 }
 
 .modeBtn,
+.modeSelect,
 .goBtn {
   min-width: 210px;
   padding: 12px 18px;
@@ -323,6 +324,52 @@ button {
 }
 
 .startControls .modeBtn {
+  color: #163254;
+}
+
+.modeSelectWrap {
+  display: grid;
+  gap: 6px;
+  width: min(100%, 250px);
+  text-align: center;
+}
+
+.modeSelectLabel {
+  color: rgba(22, 50, 84, 0.62);
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.modeSelect {
+  width: 100%;
+  min-width: 0;
+  padding-right: 34px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(219, 233, 249, 0.92) 100%);
+  color: #163254;
+  text-align: center;
+  text-align-last: center;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(219, 233, 249, 0.92) 100%),
+    linear-gradient(45deg, transparent 50%, rgba(22, 50, 84, 0.88) 50%),
+    linear-gradient(135deg, rgba(22, 50, 84, 0.88) 50%, transparent 50%);
+  background-position:
+    0 0,
+    calc(100% - 18px) calc(50% - 2px),
+    calc(100% - 12px) calc(50% - 2px);
+  background-size:
+    100% 100%,
+    6px 6px,
+    6px 6px;
+  background-repeat: no-repeat;
+  outline: 1px solid rgba(57, 91, 128, 0.16);
+}
+
+.startControls .modeSelect {
   color: #163254;
 }
 
@@ -500,37 +547,40 @@ button {
 
 @media (max-width: 768px) {
   #startScreen {
-    gap: 0;
-    justify-content: space-between;
-    padding: 12px 12px 16px;
+    gap: 6px;
+    justify-content: flex-start;
+    padding: 10px 12px 14px;
   }
 
   .startSection.top {
-    min-height: clamp(112px, 18vh, 170px);
+    width: 100%;
+    min-height: 118px;
   }
 
   .previewStage {
-    width: min(100%, 440px);
-    min-height: clamp(112px, 18vh, 170px);
+    width: min(100%, 420px);
+    min-height: 118px;
   }
 
   .startSection.middle {
     margin-top: 0;
+    margin-bottom: 0;
   }
 
   .menuMeta {
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     font-size: 0.66rem;
   }
 
   #gameLogo {
-    width: min(60%, 220px);
+    width: min(58%, 210px);
   }
 
   .startControls {
     width: 100%;
-    gap: 10px;
-    padding: 12px 14px 14px;
+    max-width: 380px;
+    gap: 9px;
+    padding: 10px 12px 12px;
   }
 
   .settingsWrap {
@@ -547,12 +597,17 @@ button {
   }
 
   .start-btn img {
-    width: min(200px, 54vw);
+    width: min(188px, 52vw);
   }
 
-  .modeBtn {
+  .modeBtn,
+  .modeSelect {
     min-width: 180px;
     padding: 10px 14px;
+  }
+
+  .modeSelectWrap {
+    width: min(100%, 220px);
   }
 
   #hud {
@@ -582,7 +637,9 @@ button {
 
 @media (max-width: 480px) {
   #startScreen {
-    gap: 0;
+    gap: 2px;
+    justify-content: flex-start;
+    padding: 8px 10px 10px;
   }
 
   .menuMeta,
@@ -592,48 +649,59 @@ button {
   }
 
   .startSection.top {
-    min-height: 104px;
+    min-height: 124px;
   }
 
   .previewStage {
-    min-height: 104px;
+    width: 100%;
+    min-height: 124px;
   }
 
   .previewCanvasHost {
-    top: 14px;
-    bottom: -14px;
+    top: 12px;
+    bottom: -2px;
   }
 
   .modeBtn,
+  .modeSelect,
   .goBtn,
   .settingsToggleBtn {
     font-size: 0.78rem;
   }
 
   .startControls {
-    gap: 8px;
-    padding: 10px 12px 12px;
+    gap: 7px;
+    padding: 9px 10px 10px;
   }
 
   #gameLogo {
-    width: min(54%, 190px);
+    width: min(46%, 164px);
   }
 
   .start-btn img {
-    width: min(176px, 50vw);
+    width: min(170px, 48vw);
+  }
+
+  .modeSelectWrap {
+    width: min(100%, 210px);
+    gap: 5px;
+  }
+
+  .modeSelectLabel {
+    font-size: 0.62rem;
   }
 
   .colorHint {
-    font-size: 0.64rem;
+    font-size: 0.6rem;
   }
 
   #colorPicker {
-    gap: 10px;
+    gap: 8px;
   }
 
   .colorDot {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
   }
 
   .settingsToggleBtn {
