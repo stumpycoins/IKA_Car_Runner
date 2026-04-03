@@ -27,6 +27,7 @@ const pauseIcon = document.getElementById("pauseIcon");
 const climateModeToggleInput = document.getElementById("climateModeToggle");
 const gameCanvasHost = document.getElementById("gameCanvasHost");
 const previewCanvasHost = document.getElementById("previewCanvasHost");
+const garagePreviewCanvasHost = document.getElementById("garagePreviewCanvasHost");
 const settingsToggleBtn = document.getElementById("settingsToggleBtn");
 const settingsPanel = document.getElementById("settingsPanel");
 const musicMenuBtn = document.getElementById("musicMenuBtn");
@@ -39,11 +40,15 @@ const soundMenuValue = document.getElementById("soundMenuValue");
 const pauseMenuValue = document.getElementById("pauseMenuValue");
 const resolutionMenuValue = document.getElementById("resolutionMenuValue");
 const startScreenEl = document.getElementById("startScreen");
+const garageScreenEl = document.getElementById("garageScreen");
+const garageOpenBtn = document.getElementById("garageOpenBtn");
+const garageBackBtn = document.getElementById("garageBackBtn");
 const gameOverEl = document.getElementById("gameOver");
 const reviveBtnEl = document.getElementById("reviveBtn");
 const hudEl = document.getElementById("hud");
 const impactFlashEl = document.getElementById("impactFlash");
 const climateModeButtons = Array.from(document.querySelectorAll(".climateOptionBtn"));
+const vehicleTypeButtons = Array.from(document.querySelectorAll(".vehicleOptionBtn"));
 
 // =============================
 // BASIC THREE SETUP
@@ -104,21 +109,25 @@ let activeResolutionQuality = applyResolutionQuality(
 let rendererHostMode = "";
 let settingsPauseActive = false;
 let manualPauseActive = false;
+let garageScreenActive = false;
 function getViewportHeight() {
   return window.visualViewport ? window.visualViewport.height : window.innerHeight;
 }
 function syncRendererHost() {
-  const targetHost = startScreenActive ? previewCanvasHost : gameCanvasHost;
-  const nextMode = startScreenActive ? "preview" : "game";
+  const targetHost = startScreenActive
+    ? (garageScreenActive ? garagePreviewCanvasHost : previewCanvasHost)
+    : gameCanvasHost;
+  const nextMode = startScreenActive ? (garageScreenActive ? "garage" : "preview") : "game";
   setStartPreviewIsolation(startScreenActive);
   if (renderer.domElement.parentElement !== targetHost) {
     targetHost.appendChild(renderer.domElement);
   }
   rendererHostMode = nextMode;
-  if (nextMode === "preview") {
-    const rect = previewCanvasHost.getBoundingClientRect();
-    const width = Math.max(1, Math.round(rect.width || previewCanvasHost.clientWidth || window.innerWidth));
-    const height = Math.max(1, Math.round(rect.height || previewCanvasHost.clientHeight || Math.max(180, getViewportHeight() * 0.24)));
+  if (nextMode !== "game") {
+    const activePreviewHost = garageScreenActive ? garagePreviewCanvasHost : previewCanvasHost;
+    const rect = activePreviewHost.getBoundingClientRect();
+    const width = Math.max(1, Math.round(rect.width || activePreviewHost.clientWidth || window.innerWidth));
+    const height = Math.max(1, Math.round(rect.height || activePreviewHost.clientHeight || Math.max(180, getViewportHeight() * 0.24)));
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderer.setSize(width, height, false);
@@ -132,6 +141,12 @@ function syncRendererHost() {
 function setStartScreenVisible(visible) {
   startScreenEl.style.opacity = visible ? "1" : "0";
   startScreenEl.style.pointerEvents = visible ? "auto" : "none";
+}
+function setGarageScreenOpen(open) {
+  garageScreenActive = open;
+  garageScreenEl.hidden = !open;
+  syncImportedVehicleModel();
+  syncRendererHost();
 }
 function showGameOverScreen() {
   gameOverEl.classList.remove("is-visible");
@@ -216,6 +231,7 @@ function returnToStartMenu() {
   launchTransition.active = false;
   crashTransition.active = false;
   startScreenActive = true;
+  setGarageScreenOpen(false);
   hideGameOverScreen();
   setPausedState(false);
   setSettingsPanelOpen(false);
@@ -456,14 +472,561 @@ function updateClimateGroundPatches() {
 // =============================
 // CAR
 // =============================
-const { car, body, hood, roof, wheels, headlightL, headlightR, beamL, beamR } =
-  THREE_FACTORIES.createPlayerCar();
-let selectedCarColor = body.material.color.getHex();
-const previewVisibleRoots = new Set([car, hemi, sunLight]);
+const VEHICLE_TYPE_KEY = "ika_vehicle_type";
+let selectedVehicleType = localStorage.getItem(VEHICLE_TYPE_KEY) || "sports";
+if (!["sports", "bike", "truck", "van", "bus", "auto"].includes(selectedVehicleType)) {
+  selectedVehicleType = "sports";
+}
+let car;
+let body;
+let hood;
+let roof;
+let wheels = [];
+let headlightL;
+let headlightR;
+let beamL;
+let beamR;
+let vehiclePaintMeshes = [];
+let vehicleBaseScale = 1;
+let selectedCarColor = 0x1e90ff;
+const previewVisibleRoots = new Set([hemi, sunLight]);
 const previewHiddenState = new Map();
 let previewIsolationActive = false;
 let previewStoredBackground = null;
 let previewStoredFog = null;
+let vehicleAccessoriesReady = false;
+const bikeGarageAssetState = {
+  loader: typeof THREE.GLTFLoader === "function" ? new THREE.GLTFLoader() : null,
+  loading: false,
+  source: null,
+  instance: null,
+  hostCar: null,
+  hiddenVisibility: new Map()
+};
+const carGarageAssetState = {
+  loader: typeof THREE.GLTFLoader === "function" ? new THREE.GLTFLoader() : null,
+  loading: false,
+  source: null,
+  instance: null,
+  hostCar: null,
+  hiddenVisibility: new Map()
+};
+const BIKE_ASSET_URL = `assets/models/bike.glb?ts=${Date.now()}`;
+const CAR_ASSET_URL = `assets/models/car.glb?ts=${Date.now()}`;
+function updateVehicleSelector() {
+  vehicleTypeButtons.forEach(button => {
+    const isActive = button.dataset.vehicle === selectedVehicleType;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+}
+function applySelectedVehicleColor() {
+  vehiclePaintMeshes.forEach(mesh => {
+    if (mesh?.material?.color) {
+      mesh.material.color.setHex(selectedCarColor);
+    }
+  });
+  if (bikeGarageAssetState.instance) {
+    bikeGarageAssetState.instance.traverse(node => {
+      if (!node.isMesh) return;
+      const materials = Array.isArray(node.material) ? node.material : [node.material];
+      materials.forEach((material, index) => {
+        if (!material) return;
+        if (material.userData?.originalBikeColor !== undefined && material.color) {
+          material.color.setHex(material.userData.originalBikeColor);
+        }
+        if (material.userData?.originalBikeMap !== undefined) {
+          material.map = material.userData.originalBikeMap;
+        }
+        if (material.userData?.originalBikeEmissiveMap !== undefined) {
+          material.emissiveMap = material.userData.originalBikeEmissiveMap;
+        }
+        if (material.userData?.originalBikeEmissive !== undefined && material.emissive) {
+          material.emissive.setHex(material.userData.originalBikeEmissive);
+        }
+        if (material.userData?.originalBikeEmissiveIntensity !== undefined) {
+          material.emissiveIntensity = material.userData.originalBikeEmissiveIntensity;
+        }
+        const shouldTint = Array.isArray(node.userData.bodyMaterials)
+          ? node.userData.bodyMaterials.includes(index)
+          : (Array.isArray(node.userData.tintableMaterials)
+            ? node.userData.tintableMaterials.includes(index)
+            : Boolean(node.userData.tintable));
+        if (shouldTint && material?.color) {
+          material.map = null;
+          if ("emissiveMap" in material) material.emissiveMap = null;
+          material.color.setHex(selectedCarColor);
+          if (material.emissive) {
+            material.emissive.setHex(0x000000);
+            material.emissiveIntensity = 0;
+          }
+        }
+        material.needsUpdate = true;
+      });
+    });
+  }
+  if (carGarageAssetState.instance) {
+    carGarageAssetState.instance.traverse(node => {
+      if (!node.isMesh) return;
+      const materials = Array.isArray(node.material) ? node.material : [node.material];
+      materials.forEach((material, index) => {
+        if (!material) return;
+        if (material.userData?.originalCarColor !== undefined && material.color) {
+          material.color.setHex(material.userData.originalCarColor);
+        }
+        if (material.userData?.originalCarMap !== undefined) {
+          material.map = material.userData.originalCarMap;
+        }
+        if (material.userData?.originalCarEmissiveMap !== undefined) {
+          material.emissiveMap = material.userData.originalCarEmissiveMap;
+        }
+        if (material.userData?.originalCarEmissive !== undefined && material.emissive) {
+          material.emissive.setHex(material.userData.originalCarEmissive);
+        }
+        if (material.userData?.originalCarEmissiveIntensity !== undefined) {
+          material.emissiveIntensity = material.userData.originalCarEmissiveIntensity;
+        }
+        if (Array.isArray(node.userData.wheelMaterials) && node.userData.wheelMaterials.includes(index) && material.color) {
+          material.map = null;
+          material.color.setHex(0x111111);
+        }
+        if (Array.isArray(node.userData.glassMaterials) && node.userData.glassMaterials.includes(index) && material.color) {
+          material.map = null;
+          material.color.setHex(0x8f98a3);
+          material.transparent = true;
+          material.opacity = 0.78;
+        }
+        if (Array.isArray(node.userData.tailLightMaterials) && node.userData.tailLightMaterials.includes(index) && material.color) {
+          material.map = null;
+          material.color.setHex(0xc81919);
+          if (material.emissive) {
+            material.emissive.setHex(0x5f0000);
+            material.emissiveIntensity = 0.65;
+          }
+        }
+        const shouldTint = Array.isArray(node.userData.tintableMaterials)
+          ? node.userData.tintableMaterials.includes(index)
+          : Boolean(node.userData.tintable);
+        if (shouldTint && material.color) {
+          material.map = null;
+          if ("emissiveMap" in material) material.emissiveMap = null;
+          material.color.setHex(selectedCarColor);
+          if (material.emissive) {
+            material.emissive.setHex(0x000000);
+            material.emissiveIntensity = 0;
+          }
+        }
+        material.needsUpdate = true;
+      });
+    });
+  }
+}
+function rebuildPlayerVehicle() {
+  const previousCar = car;
+  const vehicleRig = THREE_FACTORIES.createPlayerCar(selectedVehicleType, selectedCarColor);
+  car = vehicleRig.car;
+  body = vehicleRig.body;
+  hood = vehicleRig.hood;
+  roof = vehicleRig.roof;
+  wheels = vehicleRig.wheels;
+  headlightL = vehicleRig.headlightL;
+  headlightR = vehicleRig.headlightR;
+  beamL = vehicleRig.beamL;
+  beamR = vehicleRig.beamR;
+  vehiclePaintMeshes = vehicleRig.paintMeshes || [body, hood];
+  vehicleBaseScale = vehicleRig.baseScale || car.scale.x || 1;
+  previewVisibleRoots.delete(previousCar);
+  previewVisibleRoots.add(car);
+  if (previousCar) {
+    scene.remove(previousCar);
+  }
+  scene.add(car);
+  if (vehicleAccessoriesReady) {
+    attachVehicleAccessories();
+  }
+  syncImportedVehicleModel();
+}
+rebuildPlayerVehicle();
+selectedCarColor = body?.material?.color?.getHex?.() ?? selectedCarColor;
+updateVehicleSelector();
+function prepareBikeAsset(root) {
+  const wrapper = new THREE.Group();
+  const imported = root.clone(true);
+  wrapper.add(imported);
+  imported.traverse(node => {
+    if (node.isMesh) {
+      node.castShadow = false;
+      node.receiveShadow = false;
+      const clonedMaterials = Array.isArray(node.material)
+        ? node.material.map(material => material && material.clone())
+        : (node.material ? node.material.clone() : null);
+      node.material = clonedMaterials;
+      const activeMaterials = Array.isArray(node.material) ? node.material : [node.material];
+      activeMaterials.forEach((activeMaterial, index) => {
+        if (!activeMaterial) return;
+        activeMaterial.side = THREE.DoubleSide;
+        activeMaterial.needsUpdate = true;
+        activeMaterial.userData = activeMaterial.userData || {};
+        if (activeMaterial.color) {
+          activeMaterial.userData.originalBikeColor = activeMaterial.color.getHex();
+        }
+        activeMaterial.userData.originalBikeMap = activeMaterial.map || null;
+        activeMaterial.userData.originalBikeEmissiveMap = activeMaterial.emissiveMap || null;
+        activeMaterial.userData.originalBikeEmissive = activeMaterial.emissive?.getHex?.() ?? 0x000000;
+        activeMaterial.userData.originalBikeEmissiveIntensity = activeMaterial.emissiveIntensity ?? 0;
+      });
+    }
+  });
+
+  let box = new THREE.Box3().setFromObject(imported);
+  let size = box.getSize(new THREE.Vector3());
+
+  if (size.x > size.z) {
+    imported.rotation.y = -Math.PI / 2;
+  } else {
+    imported.rotation.y = Math.PI;
+  }
+
+  box = new THREE.Box3().setFromObject(imported);
+  size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  imported.position.x -= center.x;
+  imported.position.z -= center.z;
+  imported.position.y -= box.min.y;
+
+  const dominant = Math.max(size.x, size.z, 0.01);
+  const scale = 3.4 / dominant;
+  imported.scale.setScalar(scale);
+
+  box = new THREE.Box3().setFromObject(imported);
+  const scaledCenter = box.getCenter(new THREE.Vector3());
+  imported.position.x -= scaledCenter.x;
+  imported.position.z -= scaledCenter.z;
+  imported.position.y -= box.min.y;
+  imported.position.y += 0.04;
+  imported.position.z += 0.12;
+
+  imported.traverse(node => {
+    if (!node.isMesh) return;
+    const nodeBox = new THREE.Box3().setFromObject(node);
+    const center = nodeBox.getCenter(new THREE.Vector3());
+    const activeMaterials = Array.isArray(node.material) ? node.material : [node.material];
+    const tintableMaterials = [];
+
+    activeMaterials.forEach((activeMaterial, index) => {
+      if (!activeMaterial?.color) return;
+      const color = activeMaterial.color;
+      const isOrangePaint =
+        color.r > 0.45 &&
+        color.g > 0.16 &&
+        color.g < 0.52 &&
+        color.b < 0.18;
+      if (!isOrangePaint) return;
+
+      const isTankArea =
+        center.y >= 0.7 &&
+        center.z >= -0.45 &&
+        center.z <= 0.38;
+      const isFrontMudguardArea =
+        center.y >= 0.18 &&
+        center.y <= 0.9 &&
+        center.z <= -0.55;
+      const isSeatLowerArea =
+        center.y >= 0.28 &&
+        center.y <= 0.88 &&
+        center.z >= 0.02 &&
+        center.z <= 0.92;
+
+      if (isTankArea || isFrontMudguardArea || isSeatLowerArea) {
+        tintableMaterials.push(index);
+      }
+    });
+
+    if (tintableMaterials.length > 0) {
+      node.userData.tintableMaterials = tintableMaterials;
+    } else {
+      delete node.userData.tintableMaterials;
+    }
+  });
+
+  console.log("Bike GLB loaded", {
+    size: { x: size.x, y: size.y, z: size.z },
+    scale
+  });
+  return wrapper;
+}
+function prepareCarAsset(root) {
+  const wrapper = new THREE.Group();
+  const imported = root.clone(true);
+  wrapper.add(imported);
+  imported.traverse(node => {
+    if (!node.isMesh) return;
+    node.castShadow = false;
+    node.receiveShadow = false;
+    const clonedMaterials = Array.isArray(node.material)
+      ? node.material.map(material => material && material.clone())
+      : (node.material ? node.material.clone() : null);
+    node.material = clonedMaterials;
+    const activeMaterials = Array.isArray(node.material) ? node.material : [node.material];
+    activeMaterials.forEach(activeMaterial => {
+      if (!activeMaterial) return;
+      activeMaterial.side = THREE.DoubleSide;
+      if ("metalness" in activeMaterial) {
+        activeMaterial.metalness = Math.min(activeMaterial.metalness ?? 0.4, 0.35);
+      }
+      if ("roughness" in activeMaterial) {
+        activeMaterial.roughness = Math.max(activeMaterial.roughness ?? 0.5, 0.45);
+      }
+      if (activeMaterial.map && activeMaterial.color) {
+        activeMaterial.color.setHex(0xffffff);
+      } else if (activeMaterial.color) {
+        const liftedColor = activeMaterial.color.clone().lerp(new THREE.Color(0xb8b8b8), 0.2);
+        activeMaterial.color.copy(liftedColor);
+      }
+      activeMaterial.needsUpdate = true;
+      activeMaterial.userData = activeMaterial.userData || {};
+      if (activeMaterial.color) {
+        activeMaterial.userData.originalCarColor = activeMaterial.color.getHex();
+      }
+      activeMaterial.userData.originalCarMap = activeMaterial.map || null;
+      activeMaterial.userData.originalCarEmissiveMap = activeMaterial.emissiveMap || null;
+      activeMaterial.userData.originalCarEmissive = activeMaterial.emissive?.getHex?.() ?? 0x000000;
+      activeMaterial.userData.originalCarEmissiveIntensity = activeMaterial.emissiveIntensity ?? 0;
+    });
+  });
+
+  let box = new THREE.Box3().setFromObject(imported);
+  let size = box.getSize(new THREE.Vector3());
+
+  if (size.x > size.z) {
+    imported.rotation.y = -Math.PI / 2;
+  } else {
+    imported.rotation.y = Math.PI;
+  }
+
+  box = new THREE.Box3().setFromObject(imported);
+  size = box.getSize(new THREE.Vector3());
+  const center = box.getCenter(new THREE.Vector3());
+  imported.position.x -= center.x;
+  imported.position.z -= center.z;
+  imported.position.y -= box.min.y;
+
+  const dominant = Math.max(size.x, size.z, 0.01);
+  const scale = 2.8 / dominant;
+  imported.scale.setScalar(scale);
+
+  box = new THREE.Box3().setFromObject(imported);
+  const scaledCenter = box.getCenter(new THREE.Vector3());
+  imported.position.x -= scaledCenter.x;
+  imported.position.z -= scaledCenter.z;
+  imported.position.y -= box.min.y;
+  imported.position.y += 0.02;
+  imported.position.z += 0.02;
+
+  imported.traverse(node => {
+    if (!node.isMesh) return;
+    const nodeBox = new THREE.Box3().setFromObject(node);
+    const nodeCenter = nodeBox.getCenter(new THREE.Vector3());
+    const nodeSize = nodeBox.getSize(new THREE.Vector3());
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    const bodyMaterials = [];
+    const wheelMaterials = [];
+    const glassMaterials = [];
+    const tailLightMaterials = [];
+
+    materials.forEach((material, index) => {
+      if (!material?.color) return;
+      const isTransparentGlass = material.transparent && (material.opacity ?? 1) < 0.95;
+      const hasStrongEmissive = material.emissive && material.emissive.getHex() !== 0x000000;
+      const isWheelZone = nodeCenter.y < 0.42 || Math.abs(nodeCenter.x) > 1.35;
+      const isTailZone = nodeCenter.z > 0.85 && nodeCenter.y > 0.22 && nodeCenter.y < 0.92;
+      const isRedTailColor = material.color.r > 0.45 && material.color.g < 0.25 && material.color.b < 0.25;
+      const isGlassZone = nodeCenter.y > 0.62 && nodeCenter.y < 1.5 && Math.abs(nodeCenter.x) < 1.28 &&
+        (isTransparentGlass || material.opacity < 1 || (material.color.r > 0.45 && material.color.g > 0.45 && material.color.b > 0.45));
+
+      if (isWheelZone) {
+        wheelMaterials.push(index);
+        return;
+      }
+      if (isTailZone && (isRedTailColor || hasStrongEmissive)) {
+        tailLightMaterials.push(index);
+        return;
+      }
+      if (isGlassZone) {
+        glassMaterials.push(index);
+        return;
+      }
+      if (!hasStrongEmissive) {
+        bodyMaterials.push(index);
+      }
+    });
+
+    if (bodyMaterials.length > 0) {
+      node.userData.bodyMaterials = bodyMaterials;
+    } else {
+      delete node.userData.bodyMaterials;
+    }
+    if (wheelMaterials.length > 0) {
+      node.userData.wheelMaterials = wheelMaterials;
+    } else {
+      delete node.userData.wheelMaterials;
+    }
+    if (glassMaterials.length > 0) {
+      node.userData.glassMaterials = glassMaterials;
+    } else {
+      delete node.userData.glassMaterials;
+    }
+    if (tailLightMaterials.length > 0) {
+      node.userData.tailLightMaterials = tailLightMaterials;
+    } else {
+      delete node.userData.tailLightMaterials;
+    }
+  });
+
+  console.log("Car GLB loaded", {
+    size: { x: size.x, y: size.y, z: size.z },
+    scale
+  });
+  return wrapper;
+}
+function hideProceduralBikeForBikeAsset() {
+  bikeGarageAssetState.hiddenVisibility.clear();
+  car.children.forEach(child => {
+    if (child === bikeGarageAssetState.instance) return;
+    if (child === flame || child === jetWingLeft || child === jetWingRight) return;
+    if (child.isLight || child.type === "Object3D" || child.type === "SpotLight") return;
+    bikeGarageAssetState.hiddenVisibility.set(child, child.visible);
+    child.visible = false;
+  });
+}
+function hideProceduralCarForCarAsset() {
+  carGarageAssetState.hiddenVisibility.clear();
+  car.children.forEach(child => {
+    if (child === carGarageAssetState.instance) return;
+    if (child === flame || child === jetWingLeft || child === jetWingRight) return;
+    if (child.isLight || child.type === "Object3D" || child.type === "SpotLight") return;
+    carGarageAssetState.hiddenVisibility.set(child, child.visible);
+    child.visible = false;
+  });
+}
+function restoreProceduralBikeFromBikeAsset() {
+  bikeGarageAssetState.hiddenVisibility.forEach((visible, child) => {
+    child.visible = visible;
+  });
+  bikeGarageAssetState.hiddenVisibility.clear();
+}
+function restoreProceduralCarFromCarAsset() {
+  carGarageAssetState.hiddenVisibility.forEach((visible, child) => {
+    child.visible = visible;
+  });
+  carGarageAssetState.hiddenVisibility.clear();
+}
+function detachBikeAssetModel() {
+  if (bikeGarageAssetState.instance && bikeGarageAssetState.hostCar) {
+    bikeGarageAssetState.hostCar.remove(bikeGarageAssetState.instance);
+  }
+  bikeGarageAssetState.instance = null;
+  bikeGarageAssetState.hostCar = null;
+  restoreProceduralBikeFromBikeAsset();
+}
+function detachCarAssetModel() {
+  if (carGarageAssetState.instance && carGarageAssetState.hostCar) {
+    carGarageAssetState.hostCar.remove(carGarageAssetState.instance);
+  }
+  carGarageAssetState.instance = null;
+  carGarageAssetState.hostCar = null;
+  restoreProceduralCarFromCarAsset();
+}
+function attachBikeAssetModel() {
+  if (selectedVehicleType !== "bike") {
+    detachBikeAssetModel();
+    return;
+  }
+  if (!bikeGarageAssetState.source) return;
+  if (bikeGarageAssetState.hostCar === car && bikeGarageAssetState.instance) return;
+  detachBikeAssetModel();
+  bikeGarageAssetState.instance = prepareBikeAsset(bikeGarageAssetState.source);
+  bikeGarageAssetState.hostCar = car;
+  hideProceduralBikeForBikeAsset();
+  car.add(bikeGarageAssetState.instance);
+  applySelectedVehicleColor();
+}
+function attachCarAssetModel() {
+  if (selectedVehicleType !== "sports") {
+    detachCarAssetModel();
+    return;
+  }
+  if (!carGarageAssetState.source) return;
+  if (carGarageAssetState.hostCar === car && carGarageAssetState.instance) return;
+  detachCarAssetModel();
+  carGarageAssetState.instance = prepareCarAsset(carGarageAssetState.source);
+  carGarageAssetState.hostCar = car;
+  hideProceduralCarForCarAsset();
+  car.add(carGarageAssetState.instance);
+  applySelectedVehicleColor();
+}
+function syncGarageBikeModel() {
+  if (selectedVehicleType !== "bike") {
+    detachBikeAssetModel();
+    return;
+  }
+  if (bikeGarageAssetState.source) {
+    attachBikeAssetModel();
+    return;
+  }
+  if (!bikeGarageAssetState.loader || bikeGarageAssetState.loading) return;
+  bikeGarageAssetState.loading = true;
+  bikeGarageAssetState.loader.load(
+    BIKE_ASSET_URL,
+    gltf => {
+      bikeGarageAssetState.loading = false;
+      bikeGarageAssetState.source = gltf.scene || (gltf.scenes && gltf.scenes[0]) || null;
+      if (bikeGarageAssetState.source) {
+        attachBikeAssetModel();
+      }
+    },
+    undefined,
+    error => {
+      bikeGarageAssetState.loading = false;
+      bikeGarageAssetState.source = null;
+      console.error("Failed to load garage bike model:", error);
+      detachBikeAssetModel();
+    }
+  );
+}
+function syncGarageCarModel() {
+  if (selectedVehicleType !== "sports") {
+    detachCarAssetModel();
+    return;
+  }
+  if (carGarageAssetState.source) {
+    attachCarAssetModel();
+    return;
+  }
+  if (!carGarageAssetState.loader || carGarageAssetState.loading) return;
+  carGarageAssetState.loading = true;
+  carGarageAssetState.loader.load(
+    CAR_ASSET_URL,
+    gltf => {
+      carGarageAssetState.loading = false;
+      carGarageAssetState.source = gltf.scene || (gltf.scenes && gltf.scenes[0]) || null;
+      if (carGarageAssetState.source) {
+        attachCarAssetModel();
+      }
+    },
+    undefined,
+    error => {
+      carGarageAssetState.loading = false;
+      carGarageAssetState.source = null;
+      console.error("Failed to load garage car model:", error);
+      detachCarAssetModel();
+    }
+  );
+}
+function syncImportedVehicleModel() {
+  syncGarageBikeModel();
+  syncGarageCarModel();
+}
 // =============================
 // START SCREEN CAR VIEW
 // =============================
@@ -483,6 +1046,13 @@ const mobileStartShowcaseConfig = {
 };
 function getStartShowcaseConfig() {
   return window.innerWidth <= 480 ? mobileStartShowcaseConfig : desktopStartShowcaseConfig;
+}
+function getVehicleShowcaseScale() {
+  if (selectedVehicleType === "bike") {
+    const bikeScale = window.innerWidth <= 480 ? 1.28 : 1.48;
+    return bikeScale * vehicleBaseScale;
+  }
+  return getStartShowcaseConfig().carScale * vehicleBaseScale;
 }
 // =============================
 // SUBWAY TRACKS
@@ -664,12 +1234,9 @@ if (impactFlashEl) {
 document.querySelectorAll(".colorDot").forEach(dot => {
   dot.addEventListener("click", () => {
     selectedCarColor = parseInt(dot.dataset.color);
-    // main game car
-    body.material.color.setHex(selectedCarColor);
-    hood.material.color.setHex(selectedCarColor);
+    applySelectedVehicleColor();
   });
 });
-scene.add(car);
 function setStartPreviewIsolation(active) {
   if (active) {
     headlightL.visible = false;
@@ -712,50 +1279,53 @@ const flame = new THREE.Mesh(flameGeo, flameMat);
 flame.rotation.x = Math.PI;
 flame.position.set(0, 0.25, 1.8); // adjust to exhaust pipe
 flame.visible = false;
-car.add(flame);
 function createBatWingShape() {
   const shape = new THREE.Shape();
-  shape.moveTo(0.0, 0.22);
-  shape.lineTo(0.16, 0.18);
-  shape.lineTo(0.34, 0.2);
-  shape.lineTo(0.56, 0.14);
-  shape.lineTo(0.8, 0.18);
-  shape.lineTo(1.05, 0.08);
-  shape.lineTo(1.26, -0.02);
-  shape.lineTo(1.14, -0.1);
-  shape.lineTo(1.34, -0.24);
-  shape.lineTo(1.02, -0.2);
-  shape.lineTo(0.78, -0.32);
-  shape.lineTo(0.52, -0.24);
-  shape.lineTo(0.28, -0.34);
-  shape.lineTo(0.12, -0.2);
-  shape.lineTo(0.0, -0.24);
+  shape.moveTo(0.0, 0.14);
+  shape.bezierCurveTo(0.1, 0.24, 0.22, 0.28, 0.34, 0.26);
+  shape.bezierCurveTo(0.42, 0.25, 0.48, 0.2, 0.54, 0.14);
+  shape.bezierCurveTo(0.64, 0.24, 0.74, 0.26, 0.84, 0.2);
+  shape.bezierCurveTo(0.9, 0.16, 0.95, 0.1, 1.0, 0.03);
+  shape.bezierCurveTo(1.08, 0.1, 1.18, 0.12, 1.28, 0.04);
+  shape.bezierCurveTo(1.38, -0.04, 1.42, -0.16, 1.42, -0.27);
+  shape.bezierCurveTo(1.28, -0.24, 1.16, -0.24, 1.04, -0.28);
+  shape.bezierCurveTo(0.94, -0.3, 0.85, -0.36, 0.76, -0.42);
+  shape.bezierCurveTo(0.66, -0.36, 0.57, -0.34, 0.48, -0.36);
+  shape.bezierCurveTo(0.39, -0.38, 0.31, -0.44, 0.22, -0.5);
+  shape.bezierCurveTo(0.15, -0.44, 0.08, -0.4, 0.0, -0.4);
   shape.closePath();
   return shape;
 }
 const jetWingMat = new THREE.MeshStandardMaterial({
-  color: 0x12161d,
-  emissive: 0x081018,
-  emissiveIntensity: 0.95,
-  metalness: 0.65,
-  roughness: 0.3,
+  color: 0x0f1117,
+  emissive: 0x0b1018,
+  emissiveIntensity: 0.82,
+  metalness: 0.52,
+  roughness: 0.38,
   side: THREE.DoubleSide
 });
 const jetWingGeo = new THREE.ShapeGeometry(createBatWingShape());
 jetWingGeo.rotateX(-Math.PI / 2);
+jetWingGeo.translate(-0.72, 0, 0.1);
 const jetWingLeft = new THREE.Mesh(jetWingGeo, jetWingMat);
-jetWingLeft.position.set(-0.54, 0.58, 0.08);
+jetWingLeft.position.set(-0.7, 0.7, 0.02);
 jetWingLeft.scale.x = -1;
 const jetWingRight = jetWingLeft.clone();
 jetWingRight.scale.x = 1;
-jetWingRight.position.x = 0.54;
+jetWingRight.position.x = 0.7;
 jetWingLeft.visible = false;
 jetWingRight.visible = false;
-car.add(jetWingLeft, jetWingRight);
+function attachVehicleAccessories() {
+  car.add(flame);
+  car.add(jetWingLeft, jetWingRight);
+}
+vehicleAccessoriesReady = true;
+attachVehicleAccessories();
 // =============================
 // DRIFT SMOKE SYSTEM
 // =============================
 const smokeParticles = [];
+const crashExplosionParticles = [];
 function spawnSmoke() {
   const geo = new THREE.SphereGeometry(0.25, 8, 8);
   const mat = new THREE.MeshBasicMaterial({
@@ -769,6 +1339,33 @@ function spawnSmoke() {
   smoke.userData.life = 1;
   scene.add(smoke);
   smokeParticles.push(smoke);
+}
+function spawnCrashExplosion() {
+  const burstColors = [0xfff3b0, 0xffb347, 0xff6a00, 0x2b0f0a];
+  for (let i = 0; i < 28; i++) {
+    const radius = i < 8 ? 0.22 : 0.12 + Math.random() * 0.12;
+    const particle = new THREE.Mesh(
+      new THREE.SphereGeometry(radius, 8, 8),
+      new THREE.MeshBasicMaterial({
+        color: burstColors[Math.min(burstColors.length - 1, Math.floor(Math.random() * burstColors.length))],
+        transparent: true,
+        opacity: i < 10 ? 0.95 : 0.82
+      })
+    );
+    particle.position.set(
+      car.position.x + (Math.random() - 0.5) * 0.8,
+      0.45 + Math.random() * 1.1,
+      car.position.z - 0.2 + (Math.random() - 0.5) * 0.7
+    );
+    particle.userData.velocity = new THREE.Vector3(
+      (Math.random() - 0.5) * 0.38,
+      0.05 + Math.random() * 0.22,
+      -0.08 - Math.random() * 0.28
+    );
+    particle.userData.life = 1;
+    scene.add(particle);
+    crashExplosionParticles.push(particle);
+  }
 }
 // =============================
 // SKID MARK SYSTEM
@@ -1118,6 +1715,46 @@ function clearNearObstacles() {
     }
   }
 }
+function drawBatmanBadge(ctx, width, height) {
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const scale = width / 256;
+
+  ctx.save();
+  ctx.translate(centerX, centerY);
+  ctx.scale(scale, scale);
+
+  ctx.fillStyle = "#f6cc2f";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 104, 66, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(18, 18, 18, 0.28)";
+  ctx.lineWidth = 6;
+  ctx.stroke();
+
+  ctx.fillStyle = "#090c11";
+  ctx.beginPath();
+  ctx.moveTo(-92, 12);
+  ctx.bezierCurveTo(-82, -2, -70, -14, -54, -24);
+  ctx.bezierCurveTo(-44, -30, -34, -31, -24, -26);
+  ctx.bezierCurveTo(-20, -42, -13, -53, -4, -58);
+  ctx.lineTo(0, -42);
+  ctx.lineTo(4, -58);
+  ctx.bezierCurveTo(13, -53, 20, -42, 24, -26);
+  ctx.bezierCurveTo(34, -31, 44, -30, 54, -24);
+  ctx.bezierCurveTo(70, -14, 82, -2, 92, 12);
+  ctx.bezierCurveTo(76, 10, 62, 10, 48, 14);
+  ctx.bezierCurveTo(40, 16, 31, 23, 22, 30);
+  ctx.bezierCurveTo(14, 24, 7, 18, 0, 12);
+  ctx.bezierCurveTo(-7, 18, -14, 24, -22, 30);
+  ctx.bezierCurveTo(-31, 23, -40, 16, -48, 14);
+  ctx.bezierCurveTo(-62, 10, -76, 10, -92, 12);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.restore();
+}
 function spawnJetPower() {
   const pickup = new THREE.Group();
   const badgeCanvas = document.createElement("canvas");
@@ -1125,30 +1762,7 @@ function spawnJetPower() {
   badgeCanvas.height = 256;
   const badgeCtx = badgeCanvas.getContext("2d");
   badgeCtx.clearRect(0, 0, 256, 256);
-  badgeCtx.fillStyle = "#f4d12c";
-  badgeCtx.beginPath();
-  badgeCtx.ellipse(128, 128, 100, 64, 0, 0, Math.PI * 2);
-  badgeCtx.fill();
-  badgeCtx.fillStyle = "#0b0f14";
-  badgeCtx.beginPath();
-  badgeCtx.moveTo(40, 138);
-  badgeCtx.lineTo(70, 124);
-  badgeCtx.lineTo(86, 136);
-  badgeCtx.lineTo(102, 110);
-  badgeCtx.lineTo(118, 128);
-  badgeCtx.lineTo(128, 84);
-  badgeCtx.lineTo(138, 128);
-  badgeCtx.lineTo(154, 110);
-  badgeCtx.lineTo(170, 136);
-  badgeCtx.lineTo(186, 124);
-  badgeCtx.lineTo(216, 138);
-  badgeCtx.lineTo(174, 136);
-  badgeCtx.lineTo(154, 150);
-  badgeCtx.lineTo(128, 156);
-  badgeCtx.lineTo(102, 150);
-  badgeCtx.lineTo(82, 136);
-  badgeCtx.closePath();
-  badgeCtx.fill();
+  drawBatmanBadge(badgeCtx, 256, 256);
   const badgeTexture = new THREE.CanvasTexture(badgeCanvas);
   badgeTexture.needsUpdate = true;
   const badge = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.9), new THREE.MeshBasicMaterial({
@@ -1226,7 +1840,7 @@ function spawnCountdownObject(text, zPos) {
 // =============================
 let score = 0;
 let level = 1;
-let speed = 0.01;
+let speed = 0.08;
 let minSpeed = 0.05;
 let maxSpeed = 0.15;
 let speedStep = 0.00025; // smooth change
@@ -1250,7 +1864,7 @@ const launchTransition = {
   active: false,
   startedAt: 0,
   duration: 700,
-  startCarScale: getStartShowcaseConfig().carScale,
+  startCarScale: getVehicleShowcaseScale(),
   startCarY: getStartShowcaseConfig().carY,
   startCarZ: getStartShowcaseConfig().carZ,
   startCarRotY: 0,
@@ -1260,7 +1874,7 @@ const launchTransition = {
 const crashTransition = {
   active: false,
   startedAt: 0,
-  duration: 720,
+  duration: 5000,
   startCameraPosition: new THREE.Vector3(),
   startCarPosition: new THREE.Vector3(),
   startCarRotation: new THREE.Euler()
@@ -1519,6 +2133,22 @@ climateModeButtons.forEach(button => {
     syncAudioSettings();
   });
 });
+vehicleTypeButtons.forEach(button => {
+  button.addEventListener("click", () => {
+    selectedVehicleType = button.dataset.vehicle;
+    localStorage.setItem(VEHICLE_TYPE_KEY, selectedVehicleType);
+    rebuildPlayerVehicle();
+    applySelectedVehicleColor();
+    updateVehicleEngineSound();
+    updateVehicleSelector();
+  });
+});
+garageOpenBtn.addEventListener("click", () => {
+  setGarageScreenOpen(true);
+});
+garageBackBtn.addEventListener("click", () => {
+  setGarageScreenOpen(false);
+});
 climateModeToggleInput.addEventListener("change", () => {
   setClimateMode(climateModeToggleInput.value);
   syncAudioSettings();
@@ -1560,15 +2190,14 @@ function startCountdownSequence() {
   countdownActive = true;
   countdownObjects.forEach(o => scene.remove(o));
   countdownObjects.length = 0;
-  spawnCountdownObject("1", -20);
-  spawnCountdownObject("2", -40);
-  spawnCountdownObject("3", -60);
-  spawnCountdownObject("GO", -80);
+  spawnCountdownObject("1", -10);
+  spawnCountdownObject("2", -22);
+  spawnCountdownObject("3", -34);
+  spawnCountdownObject("GO", -46);
 }
 function resetGame(options = {}) {
   const { startRunning = true, startCountdown = true } = options;
-  body.material.color.setHex(selectedCarColor);
-  hood.material.color.setHex(selectedCarColor);
+  applySelectedVehicleColor();
   reviveUsed = false;
   waitingForAd = false;
   reviveBtnEl.style.display = "block";
@@ -1577,7 +2206,7 @@ function resetGame(options = {}) {
   // core state
   score = 0;
   level = 1;
-  speed = minSpeed;
+  speed = Math.max(minSpeed, 0.08);
   speedDir = 1;
   running = startRunning;
   paused = false;
@@ -1590,7 +2219,7 @@ function resetGame(options = {}) {
   // car state
   car.position.set(0, 0.1, 4);
   car.rotation.set(0, 0, 0);
-  car.scale.setScalar(1);
+  car.scale.setScalar(vehicleBaseScale);
   camera.position.copy(baseCameraPosition);
   camera.rotation.set(-0.35, 0, 0);
   currentLane = 1;
@@ -1624,6 +2253,8 @@ function resetGame(options = {}) {
   streetLights.length = 0;
   fireworks.forEach(item => scene.remove(item));
   fireworks.length = 0;
+  crashExplosionParticles.forEach(particle => scene.remove(particle));
+  crashExplosionParticles.length = 0;
   nextNightFireworkScore = 1000;
   clearRainDrops();
   clearSnowFlakes();
@@ -1665,6 +2296,7 @@ function startCrashSequence() {
   crashTransition.startCarPosition.copy(car.position);
   crashTransition.startCarRotation.copy(car.rotation);
   triggerImpactFlash();
+  spawnCrashExplosion();
 }
 function beginLaunchTransition() {
   resetGame({
@@ -1692,11 +2324,29 @@ const engine = document.getElementById("engine");
 const crash = document.getElementById("crash");
 const sunnyMusic = document.getElementById("sunnyMusic");
 const rainnyMusic = document.getElementById("rainnyMusic");
-engine.volume = isLowEnd ? 0.25 : 0.4;
+const defaultEngineAudioSrc = "assets/audio/engine.wav";
+const bikeEngineAudioSrc = "assets/audio/bike.mp3";
 sunnyMusic.volume = 0.42;
 rainnyMusic.volume = 0.42;
 sunnyMusic.loop = true;
 rainnyMusic.loop = true;
+function updateVehicleEngineSound() {
+  const targetSrc = selectedVehicleType === "bike" ? bikeEngineAudioSrc : defaultEngineAudioSrc;
+  const currentSrc = engine.getAttribute("src");
+  const wasPlaying = soundEnabled && !paused && !engine.paused;
+  engine.volume = selectedVehicleType === "bike"
+    ? (isLowEnd ? 0.22 : 0.32)
+    : (isLowEnd ? 0.25 : 0.4);
+  if (currentSrc === targetSrc) return;
+  engine.pause();
+  engine.setAttribute("src", targetSrc);
+  engine.load();
+  engine.currentTime = 0;
+  if (wasPlaying) {
+    playEngine();
+  }
+}
+updateVehicleEngineSound();
 setClimateMode(climateMode);
 syncAudioSettings();
 attemptAutoplayMusic();
@@ -1734,26 +2384,40 @@ function spawnGrass() {
   const group = new THREE.Group();
   const side = Math.random() > 0.5 ? -1 : 1;
   const baseX = side * (8 + Math.random() * 8);
-  // 🌿 NORMAL OR TALL GRASS
-  const isTall = Math.random() > 0.75;
-  const height = isTall ? 1.2 : 0.6;
-  const width = isTall ? 0.35 : 0.25;
-  const bladeGeo = new THREE.PlaneGeometry(width, height);
-  const bladeMat = new THREE.MeshStandardMaterial({
-    color: grassColors[Math.floor(Math.random() * grassColors.length)],
-    side: THREE.DoubleSide
-  });
-  const blade = new THREE.Mesh(bladeGeo, bladeMat);
-  blade.position.y = height / 2;
-  group.add(blade);
-  // 🌼 FLOWERS (small chance)
+  const bladeCount = 2 + Math.floor(Math.random() * 4);
+  for (let i = 0; i < bladeCount; i++) {
+    const styleRoll = Math.random();
+    const isTall = styleRoll > 0.7;
+    const isMedium = !isTall && styleRoll > 0.3;
+    const height = isTall ? 1.25 + Math.random() * 0.4 : (isMedium ? 0.8 + Math.random() * 0.22 : 0.42 + Math.random() * 0.18);
+    const width = isTall ? 0.18 + Math.random() * 0.08 : (isMedium ? 0.14 + Math.random() * 0.06 : 0.1 + Math.random() * 0.04);
+    const bladeGeo = new THREE.PlaneGeometry(width, height);
+    const bladeMat = new THREE.MeshStandardMaterial({
+      color: grassColors[Math.floor(Math.random() * grassColors.length)],
+      side: THREE.DoubleSide,
+      roughness: 0.95
+    });
+    const blade = new THREE.Mesh(bladeGeo, bladeMat);
+    blade.position.set(
+      (Math.random() - 0.5) * 0.45,
+      height / 2,
+      (Math.random() - 0.5) * 0.28
+    );
+    blade.rotation.y = (Math.random() - 0.5) * 0.8;
+    blade.rotation.z = (Math.random() - 0.5) * 0.12;
+    group.add(blade);
+  }
+  const tallestBlade = group.children.reduce((maxHeight, child) => {
+    if (!child.geometry?.parameters?.height) return maxHeight;
+    return Math.max(maxHeight, child.geometry.parameters.height);
+  }, 0.6);
   if (Math.random() > 0.85) {
     const flowerGeo = new THREE.SphereGeometry(0.08, 6, 6);
     const flowerMat = new THREE.MeshBasicMaterial({
       color: [0xff5252, 0xffeb3b, 0xff80ab, 0xffffff][Math.floor(Math.random() * 4)]
     });
     const flower = new THREE.Mesh(flowerGeo, flowerMat);
-    flower.position.set(0, height + 0.1, 0);
+    flower.position.set((Math.random() - 0.5) * 0.25, tallestBlade + 0.08, (Math.random() - 0.5) * 0.12);
     group.add(flower);
   }
   group.position.set(baseX, 0, -220);
@@ -1795,7 +2459,7 @@ function revivePlayer() {
   car.position.z = 4;
   car.position.y = 0.1;
   car.rotation.set(0, 0, 0);
-  car.scale.setScalar(1);
+  car.scale.setScalar(vehicleBaseScale);
   jetActive = false;
   jetTimer = 0;
   landingSafeTimer = 1.2;
@@ -1841,9 +2505,9 @@ document.getElementById("restartBtn").addEventListener("click", () => {
   resetGame();
 });
 document.getElementById("startBtn").addEventListener("click", () => {
-  body.material.color.setHex(selectedCarColor);
-  hood.material.color.setHex(selectedCarColor);
+  applySelectedVehicleColor();
   setSettingsPanelOpen(false);
+  setGarageScreenOpen(false);
   startScreenEl.style.transition = "opacity 0.6s ease";
   setStartScreenVisible(false);
   beginLaunchTransition();
@@ -2055,7 +2719,7 @@ function animate() {
       previewTime += 0.01;
       car.rotation.y += 0.01;
     }
-    car.scale.setScalar(startShowcaseConfig.carScale);
+    car.scale.setScalar(getVehicleShowcaseScale());
     car.position.set(0, startShowcaseConfig.carY, startShowcaseConfig.carZ);
     camera.position.copy(startShowcaseConfig.cameraPosition);
     camera.lookAt(startShowcaseConfig.lookTarget);
@@ -2066,7 +2730,7 @@ function animate() {
     const elapsed = performance.now() - launchTransition.startedAt;
     const progress = Math.min(1, elapsed / launchTransition.duration);
     const eased = 1 - Math.pow(1 - progress, 3);
-    const carScale = THREE.MathUtils.lerp(launchTransition.startCarScale, 1, eased);
+    const carScale = THREE.MathUtils.lerp(launchTransition.startCarScale, vehicleBaseScale, eased);
     const carY = THREE.MathUtils.lerp(launchTransition.startCarY, 0.1, eased);
     const carZ = THREE.MathUtils.lerp(launchTransition.startCarZ, 4, eased);
     const carRotY = THREE.MathUtils.lerp(launchTransition.startCarRotY, 0, eased);
@@ -2093,7 +2757,7 @@ function animate() {
     if (progress >= 1) {
       launchTransition.active = false;
       previewSpinActive = true;
-      car.scale.setScalar(1);
+      car.scale.setScalar(vehicleBaseScale);
       car.position.set(0, 0.1, 4);
       car.rotation.set(0, 0, 0);
       camera.position.copy(baseCameraPosition);
@@ -2106,8 +2770,9 @@ function animate() {
   if (crashTransition.active) {
     const elapsed = performance.now() - crashTransition.startedAt;
     const progress = Math.min(1, elapsed / crashTransition.duration);
-    const eased = 1 - Math.pow(1 - progress, 3);
-    const shake = (1 - progress) * 0.22;
+    const motionProgress = Math.min(1, elapsed / 900);
+    const eased = 1 - Math.pow(1 - motionProgress, 3);
+    const shake = (1 - motionProgress) * 0.22;
 
     car.position.x = crashTransition.startCarPosition.x + Math.sin(progress * 28) * shake;
     car.position.y = crashTransition.startCarPosition.y + Math.sin(progress * Math.PI) * 0.42;
@@ -2267,7 +2932,7 @@ function animate() {
       speedDir = 1;
     }
   }
-  if (countdownActive) speed = minSpeed;
+  if (countdownActive) speed = Math.max(speed, 0.08);
   // ===== COUNTDOWN OBJECT UPDATE =====
   // ===== COUNTDOWN OBJECT UPDATE (FIXED) =====
   for (let i = countdownObjects.length - 1; i >= 0; i--) {
@@ -2313,7 +2978,7 @@ function animate() {
   // - Running
   // - Not jumping
   // - Actually drifting left/right
-  if (running && !isJumping && isDrifting) {
+  if (running && !isJumping && !jetActive && isDrifting) {
     if (Math.random() < 0.4) { // control density
       spawnSmoke();
     }
@@ -2447,7 +3112,20 @@ function animate() {
       smokeParticles.splice(i, 1);
     }
   }
-  if (running && !isJumping && isDrifting) {
+  for (let i = crashExplosionParticles.length - 1; i >= 0; i--) {
+    const particle = crashExplosionParticles[i];
+    particle.position.add(particle.userData.velocity);
+    particle.userData.velocity.multiplyScalar(0.95);
+    particle.userData.velocity.y -= 0.003;
+    particle.scale.multiplyScalar(1.035);
+    particle.material.opacity -= 0.028;
+    particle.userData.life -= 0.03;
+    if (particle.userData.life <= 0 || particle.material.opacity <= 0.02) {
+      scene.remove(particle);
+      crashExplosionParticles.splice(i, 1);
+    }
+  }
+  if (running && !isJumping && !jetActive && isDrifting) {
     if (Math.random() < 0.3) {
       spawnSmoke();
       spawnSkid();
