@@ -34,6 +34,10 @@
             <span class="settingMenuLabel">Pause</span>
             <span id="pauseMenuValue" class="settingMenuValue">Off</span>
           </button>
+          <button id="exitMenuBtn" class="settingMenuItem" type="button" hidden>
+            <span class="settingMenuLabel">Exit</span>
+            <span class="settingMenuValue">Menu</span>
+          </button>
           <button id="resolutionMenuBtn" class="settingMenuItem" type="button">
             <span class="settingMenuLabel">Resolution</span>
             <span id="resolutionMenuValue" class="settingMenuValue">High</span>
@@ -62,8 +66,16 @@
             <img src="assets/images/start.png" alt="Start Game" />
           </button>
           <label class="modeSelectWrap" for="climateModeToggle">
-            <span class="modeSelectLabel">Climate</span>
-            <select id="climateModeToggle" class="modeSelect">
+            <span class="modeSelectLabel">Climate Mode</span>
+            <span class="modeSelectHelper">Choose the road mood before you launch</span>
+            <div id="climateModeButtons" class="climateButtonGroup" role="group" aria-label="Climate mode options">
+              <button class="climateOptionBtn" type="button" data-mode="sunny">Sunny</button>
+              <button class="climateOptionBtn" type="button" data-mode="night">Night</button>
+              <button class="climateOptionBtn" type="button" data-mode="rainny">Rainy</button>
+              <button class="climateOptionBtn" type="button" data-mode="snow">Snow</button>
+              <button class="climateOptionBtn" type="button" data-mode="mixed">Dynamic</button>
+            </div>
+            <select id="climateModeToggle" class="modeSelect srOnly">
               <option value="sunny">Sunny</option>
               <option value="night">Night</option>
               <option value="rainny">Rainy</option>
@@ -78,6 +90,20 @@
             <div class="colorDot" data-color="0x43a047" style="background: #43a047"></div>
             <div class="colorDot" data-color="0xffb300" style="background: #ffb300"></div>
             <div class="colorDot" data-color="0x8e24aa" style="background: #8e24aa"></div>
+          </div>
+          <div class="startTips" aria-label="How to play">
+            <div class="startTipCard">
+              <span class="startTipLabel">Swipe</span>
+              <strong>Dodge traffic fast</strong>
+            </div>
+            <div class="startTipCard">
+              <span class="startTipLabel">Jump</span>
+              <strong>Tap space to clear danger</strong>
+            </div>
+            <div class="startTipCard">
+              <span class="startTipLabel">Score</span>
+              <strong>Push longer runs for more points</strong>
+            </div>
           </div>
         </div>
       </div>
@@ -120,6 +146,7 @@
         <button id="menuBtn" class="goBtn ghost" type="button">Main Menu</button>
       </div>
     </div>
+    <div id="impactFlash" aria-hidden="true"></div>
 
     <audio id="engine" src="assets/audio/engine.wav" loop></audio>
     <audio id="crash" src="assets/audio/crash.mp3"></audio>
