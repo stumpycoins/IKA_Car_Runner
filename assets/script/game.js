@@ -32,6 +32,7 @@ const settingsPanel = document.getElementById("settingsPanel");
 const musicMenuBtn = document.getElementById("musicMenuBtn");
 const soundMenuBtn = document.getElementById("soundMenuBtn");
 const pauseMenuBtn = document.getElementById("pauseMenuBtn");
+const exitMenuBtn = document.getElementById("exitMenuBtn");
 const resolutionMenuBtn = document.getElementById("resolutionMenuBtn");
 const musicMenuValue = document.getElementById("musicMenuValue");
 const soundMenuValue = document.getElementById("soundMenuValue");
@@ -41,6 +42,8 @@ const startScreenEl = document.getElementById("startScreen");
 const gameOverEl = document.getElementById("gameOver");
 const reviveBtnEl = document.getElementById("reviveBtn");
 const hudEl = document.getElementById("hud");
+const impactFlashEl = document.getElementById("impactFlash");
+const climateModeButtons = Array.from(document.querySelectorAll(".climateOptionBtn"));
 
 // =============================
 // BASIC THREE SETUP
@@ -74,12 +77,12 @@ function getPixelRatioForQuality(quality) {
   const deviceRatio = Math.max(1, window.devicePixelRatio || 1);
   switch (quality) {
     case "low":
-      return 1;
+      return Math.max(0.7, Math.min(0.85, deviceRatio * 0.75));
     case "medium":
-      return Math.min(1.35, deviceRatio);
+      return Math.max(0.9, Math.min(1.1, deviceRatio));
     case "high":
     default:
-      return Math.min(2, deviceRatio);
+      return Math.min(1.5, Math.max(1.05, deviceRatio));
   }
 }
 function applyResolutionQuality(quality) {
@@ -90,10 +93,20 @@ function applyResolutionQuality(quality) {
   resolutionMenuValue.classList.remove("is-on", "is-off");
   return nextQuality;
 }
+function refreshRendererQuality() {
+  activeResolutionQuality = applyResolutionQuality(activeResolutionQuality);
+  syncRendererHost();
+  renderer.render(scene, camera);
+}
 let activeResolutionQuality = applyResolutionQuality(
   localStorage.getItem(RESOLUTION_QUALITY_KEY) || (isLowEnd ? "medium" : "high")
 );
 let rendererHostMode = "";
+let settingsPauseActive = false;
+let manualPauseActive = false;
+function getViewportHeight() {
+  return window.visualViewport ? window.visualViewport.height : window.innerHeight;
+}
 function syncRendererHost() {
   const targetHost = startScreenActive ? previewCanvasHost : gameCanvasHost;
   const nextMode = startScreenActive ? "preview" : "game";
@@ -104,21 +117,60 @@ function syncRendererHost() {
   rendererHostMode = nextMode;
   if (nextMode === "preview") {
     const rect = previewCanvasHost.getBoundingClientRect();
-    const width = Math.max(1, rect.width);
-    const height = Math.max(1, rect.height);
+    const width = Math.max(1, Math.round(rect.width || previewCanvasHost.clientWidth || window.innerWidth));
+    const height = Math.max(1, Math.round(rect.height || previewCanvasHost.clientHeight || Math.max(180, getViewportHeight() * 0.24)));
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderer.setSize(width, height, false);
   } else {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    const viewportHeight = Math.max(1, Math.round(getViewportHeight()));
+    camera.aspect = window.innerWidth / viewportHeight;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    renderer.setSize(window.innerWidth, viewportHeight, false);
   }
+}
+function setStartScreenVisible(visible) {
+  startScreenEl.style.opacity = visible ? "1" : "0";
+  startScreenEl.style.pointerEvents = visible ? "auto" : "none";
+}
+function showGameOverScreen() {
+  gameOverEl.classList.remove("is-visible");
+  gameOverEl.style.display = "flex";
+  requestAnimationFrame(() => {
+    gameOverEl.classList.add("is-visible");
+  });
+  updateSettingsMenuForContext();
+}
+function hideGameOverScreen() {
+  gameOverEl.classList.remove("is-visible");
+  gameOverEl.style.display = "none";
+}
+function triggerImpactFlash() {
+  if (!impactFlashEl) return;
+  impactFlashEl.classList.remove("is-active");
+  void impactFlashEl.offsetWidth;
+  impactFlashEl.classList.add("is-active");
 }
 function setSettingsPanelOpen(open) {
   updateSettingsMenuForContext();
+  const onGameOverScreen = gameOverEl.style.display === "flex";
+  const inGame = !startScreenActive && !onGameOverScreen && (running || paused);
+  if (open && inGame && !paused) {
+    paused = true;
+    settingsPauseActive = true;
+    pauseIcon.src = "assets/images/play.png";
+    engine.pause();
+  } else if (!open && settingsPauseActive && !manualPauseActive) {
+    paused = false;
+    settingsPauseActive = false;
+    pauseIcon.src = "assets/images/pause.png";
+    playEngine();
+  } else if (!open) {
+    settingsPauseActive = false;
+  }
   settingsPanel.hidden = !open;
   settingsToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  updateSettingsMenuForContext();
 }
 function setTogglePillState(element, isOn) {
   element.classList.toggle("is-on", isOn);
@@ -131,12 +183,58 @@ function updateSettingsMenuForContext() {
 
   resolutionMenuBtn.hidden = !onStartScreen;
   pauseMenuBtn.hidden = !inGame;
+  exitMenuBtn.hidden = !inGame;
   hudEl.hidden = !inGame;
   pauseMenuValue.textContent = paused ? "On" : "Off";
   setTogglePillState(pauseMenuValue, paused);
 }
+function setPausedState(nextPaused, options = {}) {
+  const { manual = false, closeSettingsOnResume = false } = options;
+  paused = nextPaused;
+  if (manual) {
+    manualPauseActive = nextPaused;
+  } else if (!nextPaused) {
+    manualPauseActive = false;
+  }
+  if (!nextPaused) {
+    settingsPauseActive = false;
+  }
+  pauseIcon.src = nextPaused ? "assets/images/play.png" : "assets/images/pause.png";
+  if (nextPaused) {
+    engine.pause();
+  } else {
+    playEngine();
+  }
+  if (!nextPaused && closeSettingsOnResume && !settingsPanel.hidden) {
+    settingsPanel.hidden = true;
+    settingsToggleBtn.setAttribute("aria-expanded", "false");
+  }
+  updateSettingsMenuForContext();
+}
+function returnToStartMenu() {
+  running = false;
+  launchTransition.active = false;
+  crashTransition.active = false;
+  startScreenActive = true;
+  hideGameOverScreen();
+  setPausedState(false);
+  setSettingsPanelOpen(false);
+  syncRendererHost();
+  previewSpinActive = true;
+  setStartScreenVisible(true);
+  engine.pause();
+  engine.currentTime = 0;
+  manualPauseActive = false;
+  settingsPauseActive = false;
+  updateSettingsMenuForContext();
+}
 function updateClimateSelector() {
   if (climateModeToggleInput) climateModeToggleInput.value = climateMode;
+  climateModeButtons.forEach(button => {
+    const isActive = button.dataset.mode === climateMode;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
 }
 // =============================
 // SKY OBJECTS
@@ -557,6 +655,12 @@ let previewTime = 0;
 let previewSpinActive = true;
 let startScreenActive = true;
 syncRendererHost();
+setStartScreenVisible(true);
+if (impactFlashEl) {
+  impactFlashEl.addEventListener("animationend", () => {
+    impactFlashEl.classList.remove("is-active");
+  });
+}
 document.querySelectorAll(".colorDot").forEach(dot => {
   dot.addEventListener("click", () => {
     selectedCarColor = parseInt(dot.dataset.color);
@@ -1153,6 +1257,14 @@ const launchTransition = {
   startCameraPosition: getStartShowcaseConfig().cameraPosition.clone(),
   startCameraRotX: -0.12
 };
+const crashTransition = {
+  active: false,
+  startedAt: 0,
+  duration: 720,
+  startCameraPosition: new THREE.Vector3(),
+  startCarPosition: new THREE.Vector3(),
+  startCarRotation: new THREE.Euler()
+};
 const countdownObjects = [];
 let isTouching = false;
 let lockedSpeed = 0;
@@ -1401,6 +1513,12 @@ function setSoundState(state) {
 soundToggleBtn.addEventListener("click", () => {
   setSoundState(!soundEnabled);
 });
+climateModeButtons.forEach(button => {
+  button.addEventListener("click", () => {
+    setClimateMode(button.dataset.mode);
+    syncAudioSettings();
+  });
+});
 climateModeToggleInput.addEventListener("change", () => {
   setClimateMode(climateModeToggleInput.value);
   syncAudioSettings();
@@ -1416,19 +1534,25 @@ soundMenuBtn.addEventListener("click", () => {
 });
 pauseMenuBtn.addEventListener("click", () => {
   if (startScreenActive || gameOverEl.style.display === "flex" || !running) return;
-  paused = !paused;
-  pauseIcon.src = paused ? "assets/images/play.png" : "assets/images/pause.png";
-  if (paused) {
-    engine.pause();
+  const nextPaused = !paused;
+  setPausedState(nextPaused, {
+    manual: true,
+    closeSettingsOnResume: !nextPaused
+  });
+  if (!nextPaused) {
+    setSettingsPanelOpen(false);
   } else {
-    playEngine();
+    settingsPauseActive = false;
   }
-  updateSettingsMenuForContext();
 });
 resolutionMenuBtn.addEventListener("click", () => {
   const qualities = ["low", "medium", "high"];
   const currentIndex = qualities.indexOf(activeResolutionQuality);
   activeResolutionQuality = applyResolutionQuality(qualities[(currentIndex + 1) % qualities.length]);
+  refreshRendererQuality();
+});
+exitMenuBtn.addEventListener("click", () => {
+  returnToStartMenu();
 });
 setSettingsPanelOpen(false);
 function startCountdownSequence() {
@@ -1457,9 +1581,12 @@ function resetGame(options = {}) {
   speedDir = 1;
   running = startRunning;
   paused = false;
+  manualPauseActive = false;
+  settingsPauseActive = false;
   roadCurve = 0;
   curveDir = 1;
   launchTransition.active = false;
+  crashTransition.active = false;
   // car state
   car.position.set(0, 0.1, 4);
   car.rotation.set(0, 0, 0);
@@ -1501,7 +1628,7 @@ function resetGame(options = {}) {
   clearRainDrops();
   clearSnowFlakes();
   // UI
-  gameOverEl.style.display = "none";
+  hideGameOverScreen();
   pauseIcon.src = "assets/images/pause.png";
   updateSettingsMenuForContext();
   // audio
@@ -1509,6 +1636,35 @@ function resetGame(options = {}) {
   playEngine();
   shops.forEach(s => scene.remove(s));
   shops.length = 0;
+}
+function finishCrashSequence() {
+  crashTransition.active = false;
+  document.getElementById("finalScore").innerText = score;
+  document.getElementById("finalLevel").innerText = level;
+  if (reviveUsed) {
+    reviveBtnEl.style.display = "none";
+  } else {
+    reviveBtnEl.style.display = "block";
+    reviveBtnEl.disabled = false;
+    reviveBtnEl.innerText = UI_TEXT.reviveReady;
+  }
+  showGameOverScreen();
+}
+function startCrashSequence() {
+  if (crashTransition.active) return;
+  if (soundEnabled) {
+    crash.currentTime = 0;
+    crash.play().catch(() => {});
+  }
+  engine.pause();
+  running = false;
+  paused = false;
+  crashTransition.active = true;
+  crashTransition.startedAt = performance.now();
+  crashTransition.startCameraPosition.copy(camera.position);
+  crashTransition.startCarPosition.copy(car.position);
+  crashTransition.startCarRotation.copy(car.rotation);
+  triggerImpactFlash();
 }
 function beginLaunchTransition() {
   resetGame({
@@ -1526,6 +1682,7 @@ function beginLaunchTransition() {
   launchTransition.startCarRotY = car.rotation.y;
   launchTransition.startCameraPosition.copy(camera.position);
   launchTransition.startCameraRotX = camera.rotation.x;
+  setStartScreenVisible(false);
   startCountdownSequence();
 }
 // =============================
@@ -1653,6 +1810,8 @@ function revivePlayer() {
   }
   // Resume game
   running = true;
+  manualPauseActive = false;
+  settingsPauseActive = false;
   paused = false;
   playEngine();
 }
@@ -1660,28 +1819,7 @@ function revivePlayer() {
 // BUTTONS
 // =============================
 document.getElementById("menuBtn").addEventListener("click", () => {
-  // stop game
-  running = false;
-  paused = false;
-  launchTransition.active = false;
-  startScreenActive = true;
-  setSettingsPanelOpen(false);
-  syncRendererHost();
-  previewSpinActive = true;
-  // hide game over
-  gameOverEl.style.display = "none";
-  // reset start screen cleanly
-  startScreenEl.style.opacity = "1";
-  startScreenEl.style.pointerEvents = "auto";
-  // ✅ DO NOT TOUCH display
-  // start.style.display = "grid"; ❌ REMOVE if present
-  // show preview again
-  // reset pause button
-  pauseIcon.src = "assets/images/pause.png";
-  // stop sounds
-  engine.pause();
-  engine.currentTime = 0;
-  updateSettingsMenuForContext();
+  returnToStartMenu();
 });
 document.getElementById("reviveBtn").addEventListener("click", () => {
   if (waitingForAd || reviveUsed) return;
@@ -1693,7 +1831,7 @@ document.getElementById("reviveBtn").addEventListener("click", () => {
   setTimeout(() => {
     waitingForAd = false;
     revivePlayer();
-    gameOverEl.style.display = "none";
+    hideGameOverScreen();
     btn.innerText = UI_TEXT.reviveReady;
     btn.disabled = false;
     updateSettingsMenuForContext();
@@ -1707,22 +1845,14 @@ document.getElementById("startBtn").addEventListener("click", () => {
   hood.material.color.setHex(selectedCarColor);
   setSettingsPanelOpen(false);
   startScreenEl.style.transition = "opacity 0.6s ease";
-  startScreenEl.style.opacity = 0;
-  startScreenEl.style.pointerEvents = "none";
+  setStartScreenVisible(false);
   beginLaunchTransition();
   updateSettingsMenuForContext();
 });
 // Pause button logic
 pauseBtn.addEventListener("click", () => {
   if (!running || gameOverEl.style.display === "flex") return;
-  paused = !paused;
-  pauseIcon.src = paused ? "assets/images/play.png" : "assets/images/pause.png";
-  if (paused) {
-    engine.pause(); // ✅ stop engine on pause
-  } else {
-    playEngine(); // ✅ resume engine
-  }
-  updateSettingsMenuForContext();
+  setPausedState(!paused, { manual: true, closeSettingsOnResume: true });
 });
 // =============================
 // INPUT
@@ -1970,6 +2100,34 @@ function animate() {
       camera.rotation.set(-0.35, 0, 0);
       running = true;
       playEngine();
+    }
+    return;
+  }
+  if (crashTransition.active) {
+    const elapsed = performance.now() - crashTransition.startedAt;
+    const progress = Math.min(1, elapsed / crashTransition.duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const shake = (1 - progress) * 0.22;
+
+    car.position.x = crashTransition.startCarPosition.x + Math.sin(progress * 28) * shake;
+    car.position.y = crashTransition.startCarPosition.y + Math.sin(progress * Math.PI) * 0.42;
+    car.position.z = crashTransition.startCarPosition.z - eased * 0.8;
+    car.rotation.x = THREE.MathUtils.lerp(crashTransition.startCarRotation.x, -0.26, eased);
+    car.rotation.y = THREE.MathUtils.lerp(crashTransition.startCarRotation.y, 0.55, eased);
+    car.rotation.z = THREE.MathUtils.lerp(crashTransition.startCarRotation.z, -0.38, eased);
+
+    camera.position.lerpVectors(
+      crashTransition.startCameraPosition,
+      new THREE.Vector3(baseCameraPosition.x, baseCameraPosition.y + 0.45, baseCameraPosition.z + 1.8),
+      eased
+    );
+    camera.position.x += Math.sin(progress * 32) * shake * 0.55;
+    camera.position.y += Math.cos(progress * 26) * shake * 0.45;
+    camera.lookAt(car.position.x * 0.2, Math.max(0.3, car.position.y * 0.65), 2.5);
+    renderer.render(scene, camera);
+
+    if (progress >= 1) {
+      finishCrashSequence();
     }
     return;
   }
@@ -2233,24 +2391,7 @@ function animate() {
     o.position.z += effectiveSpeed * WORLD_SPEED;
     o.position.x = roadCurve + o.userData.laneX;
     if (running && !paused && !countdownActive && hit(car, o)) {
-      if (soundEnabled) {
-        crash.currentTime = 0;
-        crash.play().catch(() => {});
-      }
-      engine.pause();
-      running = false;
-      const reviveBtn = document.getElementById("reviveBtn");
-      if (reviveUsed) {
-        reviveBtn.style.display = "none";
-      } else {
-        reviveBtn.style.display = "block";
-        reviveBtn.disabled = false;
-        reviveBtn.innerText = UI_TEXT.reviveReady;
-      }
-      document.getElementById("finalScore").innerText = score;
-      document.getElementById("finalLevel").innerText = level;
-      gameOverEl.style.display = "flex";
-      updateSettingsMenuForContext();
+      startCrashSequence();
       return;
     }
     if (o.position.z > 10) {
@@ -2340,7 +2481,35 @@ function animate() {
   renderer.render(scene, camera);
 }
 animate();
+renderer.domElement.addEventListener("webglcontextlost", event => {
+  event.preventDefault();
+});
+renderer.domElement.addEventListener("webglcontextrestored", () => {
+  activeResolutionQuality = applyResolutionQuality(activeResolutionQuality);
+  syncRendererHost();
+  renderer.render(scene, camera);
+});
 addEventListener("resize", () => {
   activeResolutionQuality = applyResolutionQuality(activeResolutionQuality);
   syncRendererHost();
+});
+addEventListener("orientationchange", () => {
+  setTimeout(() => {
+    activeResolutionQuality = applyResolutionQuality(activeResolutionQuality);
+    syncRendererHost();
+    renderer.render(scene, camera);
+  }, 120);
+});
+addEventListener("pageshow", () => {
+  activeResolutionQuality = applyResolutionQuality(activeResolutionQuality);
+  syncRendererHost();
+  renderer.render(scene, camera);
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  requestAnimationFrame(() => {
+    activeResolutionQuality = applyResolutionQuality(activeResolutionQuality);
+    syncRendererHost();
+    renderer.render(scene, camera);
+  });
 });
