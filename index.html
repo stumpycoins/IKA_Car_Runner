@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -65,9 +65,9 @@
           <button id="startBtn" class="start-btn" type="button">
             <img src="assets/images/start.png" alt="Start Game" />
           </button>
+          <button id="garageOpenBtn" class="garageLaunchBtn" type="button">Open Garage</button>
           <label class="modeSelectWrap" for="climateModeToggle">
             <span class="modeSelectLabel">Climate Mode</span>
-            <span class="modeSelectHelper">Choose the road mood before you launch</span>
             <div id="climateModeButtons" class="climateButtonGroup" role="group" aria-label="Climate mode options">
               <button class="climateOptionBtn" type="button" data-mode="sunny">Sunny</button>
               <button class="climateOptionBtn" type="button" data-mode="night">Night</button>
@@ -83,27 +83,41 @@
               <option value="mixed">Dynamic</option>
             </select>
           </label>
-          <div class="colorHint">Pick your Car color</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="garageScreen" hidden>
+      <div class="garageBg"></div>
+      <div class="garageShell">
+        <div class="garageHeader">
+          <div>
+            <div class="garageEyebrow">Vehicle Garage</div>
+            <div class="garageTitle">Choose Your Ride</div>
+          </div>
+          <button id="garageBackBtn" class="garageBackBtn" type="button" aria-label="Close garage">&times;</button>
+        </div>
+        <div class="garagePreviewStage">
+          <div id="garagePreviewCanvasHost" class="previewCanvasHost garagePreviewCanvasHost"></div>
+        </div>
+        <div class="garageControls">
+          <div class="modeSelectWrap">
+            <span class="modeSelectLabel">Vehicle Select</span>
+            <div id="vehicleTypeButtons" class="vehicleButtonGroup" role="group" aria-label="Vehicle selection">
+              <button class="vehicleOptionBtn" type="button" data-vehicle="sports">Sports Car</button>
+              <button class="vehicleOptionBtn" type="button" data-vehicle="bike">Bike</button>
+              <button class="vehicleOptionBtn" type="button" data-vehicle="truck">Truck</button>
+              <button class="vehicleOptionBtn" type="button" data-vehicle="van">Van</button>
+              <button class="vehicleOptionBtn" type="button" data-vehicle="bus">Bus</button>
+              <button class="vehicleOptionBtn" type="button" data-vehicle="auto">Auto</button>
+            </div>
+          </div>
           <div id="colorPicker">
             <div class="colorDot" data-color="0x1e90ff" style="background: #1e90ff"></div>
             <div class="colorDot" data-color="0xe53935" style="background: #e53935"></div>
             <div class="colorDot" data-color="0x43a047" style="background: #43a047"></div>
             <div class="colorDot" data-color="0xffb300" style="background: #ffb300"></div>
             <div class="colorDot" data-color="0x8e24aa" style="background: #8e24aa"></div>
-          </div>
-          <div class="startTips" aria-label="How to play">
-            <div class="startTipCard">
-              <span class="startTipLabel">Swipe</span>
-              <strong>Dodge traffic fast</strong>
-            </div>
-            <div class="startTipCard">
-              <span class="startTipLabel">Jump</span>
-              <strong>Tap space to clear danger</strong>
-            </div>
-            <div class="startTipCard">
-              <span class="startTipLabel">Score</span>
-              <strong>Push longer runs for more points</strong>
-            </div>
           </div>
         </div>
       </div>
@@ -154,6 +168,7 @@
     <audio id="rainnyMusic" src="assets/audio/Rainny_Music.mp3" loop autoplay playsinline></audio>
 
     <script src="assets/script/Three_Min.js"></script>
+    <script src="assets/script/GLTFLoader.js"></script>
     <script src="assets/script/three-object-factories.js"></script>
     <script src="assets/script/game-config.js"></script>
     <script src="assets/script/game.js"></script>
