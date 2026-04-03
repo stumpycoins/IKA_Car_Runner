@@ -16,6 +16,7 @@
 html,
 body {
   margin: 0;
+  height: 100%;
   min-height: 100%;
   overflow: hidden;
   background: #02050a;
@@ -35,11 +36,15 @@ button {
   position: fixed;
   inset: 0;
   z-index: 0;
+  background:
+    radial-gradient(circle at top, rgba(149, 196, 244, 0.5), transparent 38%),
+    linear-gradient(180deg, #98c1ea 0%, #5f87b0 42%, #29415a 100%);
 }
 
 #startScreen {
   position: fixed;
   inset: 0;
+  min-height: 100dvh;
   z-index: 20;
   display: flex;
   flex-direction: column;
@@ -67,6 +72,10 @@ button {
   position: relative;
   z-index: 1;
   width: min(100%, 720px);
+}
+
+.startSection.bottom {
+  width: min(100%, 520px);
 }
 
 .startSection.top {
@@ -138,11 +147,13 @@ button {
   gap: 14px;
   width: min(100%, 460px);
   margin: 0 auto;
-  padding: 14px 18px 16px;
-  background: rgba(229, 241, 255, 0.24);
-  border: 1px solid rgba(57, 91, 128, 0.14);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
-  backdrop-filter: blur(6px);
+  padding: 16px 18px 18px;
+  background: linear-gradient(180deg, rgba(239, 247, 255, 0.86) 0%, rgba(211, 227, 245, 0.74) 100%);
+  border: 1px solid rgba(57, 91, 128, 0.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    0 18px 30px rgba(54, 86, 123, 0.14);
+  backdrop-filter: blur(10px);
 }
 
 .start-btn {
@@ -329,8 +340,8 @@ button {
 
 .modeSelectWrap {
   display: grid;
-  gap: 6px;
-  width: min(100%, 250px);
+  gap: 8px;
+  width: min(100%, 360px);
   text-align: center;
 }
 
@@ -340,6 +351,50 @@ button {
   font-size: 0.68rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
+}
+
+.modeSelectHelper {
+  color: rgba(22, 50, 84, 0.68);
+  font-size: 0.9rem;
+  line-height: 1.2;
+}
+
+.climateButtonGroup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.climateOptionBtn {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(57, 91, 128, 0.18);
+  background: rgba(255, 255, 255, 0.62);
+  color: #163254;
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.climateOptionBtn:hover,
+.climateOptionBtn:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(255, 122, 24, 0.42);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 16px rgba(54, 86, 123, 0.14);
+  outline: none;
+}
+
+.climateOptionBtn.is-active {
+  border-color: rgba(255, 122, 24, 0.7);
+  background: linear-gradient(135deg, rgba(255, 122, 24, 0.94) 0%, rgba(255, 212, 71, 0.92) 100%);
+  color: #102033;
+  box-shadow: 0 12px 20px rgba(255, 122, 24, 0.22);
 }
 
 .modeSelect {
@@ -383,6 +438,37 @@ button {
   flex-wrap: wrap;
   justify-content: center;
   gap: 14px;
+}
+
+.startTips {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.startTipCard {
+  display: grid;
+  gap: 6px;
+  min-height: 86px;
+  padding: 12px 10px;
+  border: 1px solid rgba(57, 91, 128, 0.14);
+  background: rgba(255, 255, 255, 0.44);
+  color: #163254;
+  align-content: start;
+}
+
+.startTipCard strong {
+  font-size: 0.9rem;
+  line-height: 1.15;
+}
+
+.startTipLabel {
+  color: rgba(22, 50, 84, 0.58);
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .colorDot {
@@ -479,6 +565,12 @@ button {
   backdrop-filter: blur(6px);
   flex-direction: column;
   text-align: center;
+  opacity: 0;
+  transform: scale(0.97);
+}
+
+#gameOver.is-visible {
+  animation: gameOverReveal 0.42s ease forwards;
 }
 
 #gameOverImg {
@@ -545,21 +637,36 @@ button {
   color: rgba(22, 50, 84, 0.68);
 }
 
+#impactFlash {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.95) 0%, rgba(255, 164, 95, 0.88) 18%, rgba(255, 90, 90, 0.42) 42%, rgba(255, 90, 90, 0) 72%);
+  mix-blend-mode: screen;
+}
+
+#impactFlash.is-active {
+  animation: impactFlash 0.42s ease-out forwards;
+}
+
 @media (max-width: 768px) {
   #startScreen {
     gap: 6px;
-    justify-content: flex-start;
+    justify-content: space-between;
     padding: 10px 12px 14px;
   }
 
   .startSection.top {
     width: 100%;
-    min-height: 118px;
+    min-height: 140px;
   }
 
   .previewStage {
     width: min(100%, 420px);
-    min-height: 118px;
+    min-height: 140px;
   }
 
   .startSection.middle {
@@ -579,8 +686,8 @@ button {
   .startControls {
     width: 100%;
     max-width: 380px;
-    gap: 9px;
-    padding: 10px 12px 12px;
+    gap: 10px;
+    padding: 12px 12px 14px;
   }
 
   .settingsWrap {
@@ -601,13 +708,31 @@ button {
   }
 
   .modeBtn,
-  .modeSelect {
+  .modeSelect,
+  .goBtn {
     min-width: 180px;
     padding: 10px 14px;
   }
 
   .modeSelectWrap {
-    width: min(100%, 220px);
+    width: 100%;
+  }
+
+  .modeSelectHelper {
+    font-size: 0.78rem;
+  }
+
+  .startTips {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .startTipCard {
+    min-height: 78px;
+    padding: 10px 8px;
+  }
+
+  .startTipCard strong {
+    font-size: 0.76rem;
   }
 
   #hud {
@@ -637,9 +762,9 @@ button {
 
 @media (max-width: 480px) {
   #startScreen {
-    gap: 2px;
-    justify-content: flex-start;
-    padding: 8px 10px 10px;
+    gap: 8px;
+    justify-content: space-between;
+    padding: 8px 10px 12px;
   }
 
   .menuMeta,
@@ -649,12 +774,12 @@ button {
   }
 
   .startSection.top {
-    min-height: 124px;
+    min-height: 148px;
   }
 
   .previewStage {
     width: 100%;
-    min-height: 124px;
+    min-height: 148px;
   }
 
   .previewCanvasHost {
@@ -670,8 +795,8 @@ button {
   }
 
   .startControls {
-    gap: 7px;
-    padding: 9px 10px 10px;
+    gap: 9px;
+    padding: 12px 10px 12px;
   }
 
   #gameLogo {
@@ -679,16 +804,30 @@ button {
   }
 
   .start-btn img {
-    width: min(170px, 48vw);
+    width: min(178px, 56vw);
   }
 
   .modeSelectWrap {
-    width: min(100%, 210px);
+    width: 100%;
     gap: 5px;
   }
 
   .modeSelectLabel {
     font-size: 0.62rem;
+  }
+
+  .modeSelectHelper {
+    font-size: 0.72rem;
+  }
+
+  .climateButtonGroup {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .climateOptionBtn {
+    padding: 11px 10px;
+    font-size: 0.66rem;
   }
 
   .colorHint {
@@ -704,6 +843,17 @@ button {
     height: 32px;
   }
 
+  .startTips {
+    grid-template-columns: 1fr;
+  }
+
+  .startTipCard {
+    min-height: 0;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    text-align: left;
+  }
+
   .settingsToggleBtn {
     width: 42px;
     height: 42px;
@@ -711,6 +861,29 @@ button {
 
   .goStats {
     grid-template-columns: 1fr;
+  }
+}
+
+@keyframes gameOverReveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes impactFlash {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }
 
