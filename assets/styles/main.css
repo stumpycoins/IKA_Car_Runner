@@ -56,6 +56,83 @@ button {
   text-align: center;
 }
 
+#garageScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+
+#garageScreen[hidden] {
+  display: none;
+}
+
+.garageBg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top, rgba(120, 173, 232, 0.28), transparent 34%),
+    linear-gradient(180deg, rgba(8, 20, 35, 0.92) 0%, rgba(15, 31, 54, 0.96) 100%);
+}
+
+.garageShell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 16px;
+  width: min(100%, 840px);
+  padding: 20px;
+  background: rgba(228, 239, 251, 0.94);
+  border: 1px solid rgba(116, 152, 189, 0.22);
+  box-shadow: 0 24px 40px rgba(3, 11, 22, 0.34);
+}
+
+.garageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  position: relative;
+}
+
+.garageEyebrow,
+.garageTitle {
+  font-family: "Orbitron", sans-serif;
+  text-transform: uppercase;
+}
+
+.garageEyebrow {
+  color: rgba(22, 50, 84, 0.58);
+  font-size: 0.68rem;
+  letter-spacing: 0.18em;
+}
+
+.garageTitle {
+  margin-top: 4px;
+  color: #163254;
+  font-size: clamp(1.2rem, 3vw, 1.8rem);
+  letter-spacing: 0.08em;
+}
+
+.garagePreviewStage {
+  position: relative;
+  min-height: clamp(220px, 34vh, 320px);
+  background:
+    radial-gradient(circle at center, rgba(123, 169, 214, 0.36) 0%, rgba(123, 169, 214, 0.08) 38%, transparent 68%);
+}
+
+.garagePreviewCanvasHost {
+  inset: 6px 0 0;
+}
+
+.garageControls {
+  display: grid;
+  gap: 14px;
+}
+
 #startScreen .bg {
   position: absolute;
   inset: 0;
@@ -176,6 +253,44 @@ button {
 
 .start-btn:active img {
   transform: scale(0.96);
+}
+
+.garageBackBtn,
+.garageLaunchBtn {
+  padding: 12px 18px;
+  border: 1px solid rgba(57, 91, 128, 0.18);
+  background: rgba(255, 255, 255, 0.8);
+  color: #163254;
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.74rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.garageBackBtn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.4rem;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.garageBackBtn:hover,
+.garageLaunchBtn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 122, 24, 0.44);
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.garageLaunchBtn {
+  min-width: min(230px, 72vw);
 }
 
 .settingsWrap {
@@ -366,6 +481,13 @@ button {
   width: 100%;
 }
 
+.vehicleButtonGroup {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
 .climateOptionBtn {
   min-width: 0;
   padding: 12px 14px;
@@ -395,6 +517,37 @@ button {
   background: linear-gradient(135deg, rgba(255, 122, 24, 0.94) 0%, rgba(255, 212, 71, 0.92) 100%);
   color: #102033;
   box-shadow: 0 12px 20px rgba(255, 122, 24, 0.22);
+}
+
+.vehicleOptionBtn {
+  min-width: 0;
+  padding: 12px 10px;
+  border: 1px solid rgba(57, 91, 128, 0.18);
+  background: rgba(247, 251, 255, 0.72);
+  color: #163254;
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.vehicleOptionBtn:hover,
+.vehicleOptionBtn:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(255, 122, 24, 0.4);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 10px 16px rgba(54, 86, 123, 0.14);
+  outline: none;
+}
+
+.vehicleOptionBtn.is-active {
+  border-color: rgba(32, 87, 140, 0.55);
+  background: linear-gradient(135deg, rgba(40, 101, 163, 0.92) 0%, rgba(128, 205, 255, 0.92) 100%);
+  color: #f8fbff;
+  box-shadow: 0 12px 20px rgba(34, 104, 166, 0.2);
 }
 
 .modeSelect {
@@ -577,6 +730,9 @@ button {
   width: min(100%, 240px);
   margin-bottom: 8px;
   filter: drop-shadow(0 14px 18px rgba(47, 82, 120, 0.18));
+  display: block;
+  position: relative;
+  z-index: 2;
 }
 
 .goTitle {
@@ -599,6 +755,9 @@ button {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin: 20px 0;
+  width: min(100%, 360px);
+  position: relative;
+  z-index: 1;
 }
 
 .goStats > div {
@@ -644,12 +803,13 @@ button {
   pointer-events: none;
   opacity: 0;
   background:
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.95) 0%, rgba(255, 164, 95, 0.88) 18%, rgba(255, 90, 90, 0.42) 42%, rgba(255, 90, 90, 0) 72%);
+    radial-gradient(circle at center, rgba(255, 255, 255, 1) 0%, rgba(255, 241, 170, 0.98) 9%, rgba(255, 171, 66, 0.94) 20%, rgba(255, 88, 36, 0.8) 36%, rgba(255, 43, 43, 0.4) 56%, rgba(255, 43, 43, 0) 82%);
   mix-blend-mode: screen;
+  transform: scale(0.7);
 }
 
 #impactFlash.is-active {
-  animation: impactFlash 0.42s ease-out forwards;
+  animation: impactFlash 0.72s ease-out forwards;
 }
 
 @media (max-width: 768px) {
@@ -718,8 +878,32 @@ button {
     width: 100%;
   }
 
+  .garageShell {
+    padding: 16px;
+  }
+
+  .garageHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .garageBackBtn {
+    top: 10px;
+    right: 10px;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    padding: 0;
+    font-size: 1.2rem;
+  }
+
   .modeSelectHelper {
     font-size: 0.78rem;
+  }
+
+  .vehicleOptionBtn {
+    font-size: 0.62rem;
+    padding: 11px 8px;
   }
 
   .startTips {
@@ -825,9 +1009,29 @@ button {
     gap: 7px;
   }
 
+  .vehicleButtonGroup {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .garageShell {
+    gap: 12px;
+    padding: 14px 12px;
+  }
+
+  .garagePreviewStage {
+    min-height: 210px;
+  }
+
   .climateOptionBtn {
     padding: 11px 10px;
     font-size: 0.66rem;
+  }
+
+  .vehicleOptionBtn {
+    font-size: 0.58rem;
+    padding: 10px 7px;
+    letter-spacing: 0.08em;
   }
 
   .colorHint {
@@ -878,12 +1082,19 @@ button {
 @keyframes impactFlash {
   0% {
     opacity: 0;
+    transform: scale(0.7);
   }
-  18% {
+  12% {
     opacity: 1;
+    transform: scale(1.25);
+  }
+  38% {
+    opacity: 0.92;
+    transform: scale(1.6);
   }
   100% {
     opacity: 0;
+    transform: scale(2.1);
   }
 }
 
